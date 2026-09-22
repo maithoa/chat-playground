@@ -1,0 +1,27 @@
+name: Seed Project Board
+
+on:
+  push:
+    branches:
+      - main   # run only on the default branch
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
+
+      - name: Authenticate GH CLI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh auth status
+
+      - name: Run board‑creation script
+        run: |
+          chmod +x ./scripts/create-board.sh
+          ./scripts/create-board.sh
