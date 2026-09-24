@@ -1,0 +1,3 @@
+# Support Multiple LLM Providers
+
+We decided to design the system to support multiple large language model (LLM) providers (OpenAI, Anthropic, Hugging Face). This choice is hard to reverse because swapping providers later would require changes in the backend integration layer and UI selection logic. It is surprising to readers that the backend abstracts over different APIs rather than being tied to a single provider. The trade‑off considered alternatives like a single‑provider design (simpler code) versus multi‑provider flexibility (broader user choice, future‑proofing). We chose multi‑provider to enable users to select the model that best fits their needs and to avoid vendor lock‑in.

@@ -1,141 +1,149 @@
-
 #!/usr/bin/env bash
-# -------------------------------------------------------------------------
-# create-board.sh
-#   • Accepts a GitHub Project URL (user‑level Projects v2) as the only arg.
-#   • Handles plain URLs as well as the markdown form @url:`…`.
-#   • If the project does not exist → creates it.
-#   • Guarantees the four classic Kanban columns (To Do, In Progress,
-#     Blocked, Done) are present (creates any missing ones).
-#   • Uses the GitHub CLI (gh); you must be logged in (gh auth login).
-# -------------------------------------------------------------------------
+
+# This script reads EPICS.md and creates GitHub issues for epics, user stories, and tasks.
+# It expects GITHUB_TOKEN, GITHUB_PROJECT_URL, and GITHUB_OWNER to be set in environment / .env.
 
 set -euo pipefail
 
-die() { echo "❌ $*" >&2; exit 1; }
+# Load environment variables from .env if present
+ENV_PATH="$(dirname "${BASH_SOURCE[0]}")/../.env"
 
-# ---------- 0️⃣  Helper: strip possible markdown wrappers ----------
-clean_url() {
-  local raw="$1"
-  # Remove a leading "@url:" if someone copies the markdown link
-  raw="${raw#@url:}"
-  # Strip surrounding back‑ticks (or single quotes) – both sides
-  raw="${raw%\`}"   # trailing back‑tick
-  raw="${raw#\`}"   # leading back‑tick
-  raw="${raw%\"}"   # trailing double‑quote (just in case)
-  raw="${raw#\"}"   # leading double‑quote
-  raw="${raw%\'}"   # trailing single‑quote
-  raw="${raw#\'}"   # leading single‑quote
-  echo "$raw"
-}
-
-# ---------- 1️⃣  Parse the argument ----------
-if [[ $# -ne 1 ]]; then
-  die "Usage: $0 <project‑url>
-Example: $0 https://github.com/users/maithoa/projects/1"
+if [[ -f "$ENV_PATH" ]]; then
+  # shellcheck disable=SC1091
+  source "$ENV_PATH"
 fi
 
-PROJECT_URL_RAW="$1"
-PROJECT_URL="$(clean_url "$PROJECT_URL_RAW")"
-
-# Expected forms:
-#   https://github.com/users/<login>/projects/<num>
-#   https://github.com/orgs/<org>/projects/<num>
-#   https://github.com/<owner>/projects/<num>
-if [[ "$PROJECT_URL" =~ github\.com/+(users/)?([^/]+)/projects/([0-9]+) ]]; then
-  OWNER="${BASH_REMATCH[2]}"
-  PROJ_NUM="${BASH_REMATCH[3]}"
-  echo "Owner: $OWNER" 
-  echo "Project_num : $PROJ_NUM"
-else
-  die "Could not parse a valid GitHub Project URL: $PROJECT_URL"
+if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+  echo "Error: GITHUB_TOKEN environment variable not set" >&2
+  exit 1
 fi
 
-echo "🔎 Parsed URL → owner: $OWNER , project number: $PROJ_NUM"
-
-# ---------- 2️⃣  Resolve the owner’s GraphQL node ID ----------
-OWNER_ID=$(gh api graphql -f query='
-  query($login: String!){
-    user(login: $login){ id }
-    organization(login: $login){ id }
-  }' -f login="$OWNER" -q '
-    .data.user?.id // user case
-    // fallback to org case
-    .data.organization?.id
-  ' 2>/dev/null || true)
-
-if [[ -z "$OWNER_ID" ]]; then
-  die "Unable to resolve owner \"$OWNER\" to a GitHub node ID."
-fi
-echo "👤 Owner node ID = $OWNER_ID"
-
-# ---------- 3️⃣  Check whether the project already exists ----------
-PROJECT_ID=$(gh api graphql -f query='
-  query($owner: String!, $num: Int!){
-    user(login: $owner){ projectV2(number: $num){ id } }
-    organization(login: $owner){ projectV2(number: $num){ id } }
-  }' -f owner="$OWNER" -f num=$PROJ_NUM -q '
-    .data.user?.projectV2?.id
-    // fallback to org
-    .data.organization?.projectV2?.id
-  ' 2>/dev/null || true)
-
-if [[ -n "$PROJECT_ID" ]]; then
-  echo "✅ Project already exists – node ID = $PROJECT_ID"
-else
-  echo "🚧 Project does NOT exist – creating a new one…"
-  PROJECT_ID=$(gh api graphql -f query='
-    mutation($ownerId: ID!, $title: String!){
-      createProjectV2(input:{ownerId:$ownerId, title:$title, public:true}){
-        projectV2{ id }
-      }
-    }' -f ownerId="$OWNER_ID" -f title="Chat Playground – Sprint Board" -q '
-      .data.createProjectV2.projectV2.id
-    ')
-  echo "🆕 Created new project – node ID = $PROJECT_ID"
+if [[ -z "${GITHUB_PROJECT_URL:-}" ]]; then
+  echo "Error: GITHUB_PROJECT_URL environment variable not set" >&2
+  exit 1
 fi
 
-# ---------- 4️⃣  Ensure the four columns exist ----------
-# Pull existing column names (and IDs) so we don’t duplicate them.
-mapfile -t EXISTING_COLUMNS < <(
-  gh api graphql -f query='
-    query($projectId: ID!){
-      node(id: $projectId){
-        ... on ProjectV2{
-          columns(first:100){
-            nodes{ id name }
-          }
-        }
-      }
-    }' -f projectId="$PROJECT_ID" -q '
-      .data.node.columns.nodes[]
-      | "\(.name)||\(.id)"
-    ' 2>/dev/null
-)
+REPO_SLUG="${1:-}"
+if [[ -z "$REPO_SLUG" ]]; then
+  echo "Usage: $0 <owner/repo>" >&2
+  exit 1
+fi
 
-declare -A COL_NAME_TO_ID
-for line in "${EXISTING_COLUMNS[@]}"; do
-  name="${line%%||*}"
-  id="${line##*||}"
-  COL_NAME_TO_ID["$name"]="$id"
-done
+# Determine Owner: use GITHUB_OWNER if present, otherwise extract from REPO_SLUG
+OWNER="${GITHUB_OWNER:-${REPO_SLUG%%/*}}"
 
-COLUMNS=("To Do" "In Progress" "Blocked" "Done")
-for col in "${COLUMNS[@]}"; do
-  if [[ -n "${COL_NAME_TO_ID[$col]:-}" ]]; then
-    echo "✅ Column already exists: $col"
+EPICS_FILE="EPICS.md"
+PROJECT_URL="${GITHUB_PROJECT_URL}"
+
+# Extract project number from URL
+PROJECT_NUM="$(basename "$PROJECT_URL")"
+
+if [[ ! -f "$EPICS_FILE" ]]; then
+  echo "Error: $EPICS_FILE not found!" >&2
+  exit 1
+fi
+
+# Authenticate gh with token
+export GH_TOKEN="${GITHUB_TOKEN:-}"
+
+current_epic=""
+epic_number=""
+story_counter=0
+
+declare -A EPIC_URLS
+declare -A STORY_URLS
+
+while IFS= read -r line || [[ -n "$line" ]]; do
+  # Detect epic header
+  if [[ $line =~ ^##[[:space:]]*Epic[[:space:]]*([0-9]+):[[:space:]]*(.*) ]]; then
+    epic_number="${BASH_REMATCH[1]}"
+    epic_title="${BASH_REMATCH[2]}"
+    current_epic="Epic ${epic_number}: ${epic_title}"
+    story_counter=0 # Reset story counter for each epic
+
+    epic_issue_title="Epic ${epic_number}: ${epic_title}"
+    epic_body="Generated from EPICS.md. This epic groups related user stories."
+    echo "Creating Epic issue: $epic_issue_title"
+    epic_url=$(gh issue create --repo "$REPO_SLUG" --title "$epic_issue_title" --body "$epic_body" --label "epic")
+    echo "Created Epic: $epic_url"
+    EPIC_URLS[${epic_number}]="$epic_url"
     continue
   fi
-  echo "➕ Creating column: $col"
-  gh api graphql -f query='
-    mutation($projectId: ID!, $name: String!){
-      addProjectV2Column(input:{projectId:$projectId, name:$name}){
-        columnEdge{ node{ id name } }
-      }
-    }' -f projectId="$PROJECT_ID" -f name="$col" >/dev/null 2>&1 \
-    && echo "   → $col added"
-done
 
-# ---------- 5️⃣  Final public URL ----------
-FINAL_URL="https://github.com/users/$OWNER/projects/$PROJ_NUM"
-echo "✅✅✅ Board ready! Open it at: $FINAL_URL"
+  # Detect user story lines
+  if [[ $line =~ ^[0-9]+\.[[:space:]]*\*\*As[[:space:]]*a[[:space:]]*(.*)\*\* ]]; then
+    story_desc="${BASH_REMATCH[1]}"
+    ((story_counter++))
+
+    story_title="User Story: As a ${story_desc}"
+    
+    story_body=$(cat <<EOF
+Generated from EPICS.md under ${current_epic}.
+
+Parent Epic: ${EPIC_URLS[${epic_number}]:-N/A}
+EOF
+)
+
+    echo "Creating User Story issue: $story_title"
+    story_url=$(gh issue create --repo "$REPO_SLUG" --title "$story_title" --body "$story_body" --label "user-story")
+    echo "Created User Story: $story_url"
+    
+    STORY_URLS["${epic_number}_${story_counter}"]="$story_url"
+
+    if gh project item-add "$PROJECT_NUM" --owner "$OWNER" --url "$story_url" >/dev/null 2>&1; then
+      echo "Added User Story to Project #$PROJECT_NUM"
+    else
+      echo "⚠️ Could not auto‑add to project. Add manually: $PROJECT_URL"
+    fi
+    continue
+  fi
+done < "$EPICS_FILE"
+
+# ---------------------------------------------------------------------------
+# Create Task issues based on PROJECT_PLAN.md
+# ---------------------------------------------------------------------------
+
+PROJECT_PLAN="PROJECT_PLAN.md"
+if [[ -f "$PROJECT_PLAN" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ $line =~ ^[0-9]+[[:space:]]+([^\t]+)[[:space:]]+(.*)$ ]]; then
+      task_desc="${BASH_REMATCH[1]}"
+      epic_ref="${BASH_REMATCH[2]}"
+
+      ref_epic_num=""
+      if [[ $epic_ref =~ Epic[^0-9]*([0-9]+) ]]; then
+        ref_epic_num="${BASH_REMATCH[1]}"
+      fi
+
+      story_num=""
+      if [[ $epic_ref =~ Story[^0-9]*([0-9]+) ]]; then
+        story_num="${BASH_REMATCH[1]}"
+      fi
+
+      [[ -z "$ref_epic_num" ]] && continue
+
+      parent_epic_url="${EPIC_URLS[$ref_epic_num]:-N/A}"
+      related_story_url="${STORY_URLS[${ref_epic_num}_${story_num}]:-}"
+
+      task_body="Task generated from PROJECT_PLAN.md.\n\nParent Epic: ${parent_epic_url}"
+      if [[ -n "$related_story_url" ]]; then
+        task_body="${task_body}\nRelated User Story: ${related_story_url}"
+      fi
+
+      task_title="Task: ${task_desc}"
+      echo "Creating Task issue: $task_title"
+      task_url=$(gh issue create --repo "$REPO_SLUG" --title "$task_title" --body "$(echo -e "$task_body")" --label "task")
+      echo "Created Task: $task_url"
+
+      if gh project item-add "$PROJECT_NUM" --owner "$OWNER" --url "$task_url" >/dev/null 2>&1; then
+        echo "Added Task to Project #$PROJECT_NUM"
+      else
+        echo "⚠️ Could not auto‑add task to project. Add manually: $PROJECT_URL"
+      fi
+    fi
+  done < "$PROJECT_PLAN"
+else
+  echo "⚠️ PROJECT_PLAN.md not found – skipping task creation."
+fi
+
+echo "All epics, user stories, and tasks processed successfully."
