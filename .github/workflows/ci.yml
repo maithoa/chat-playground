@@ -1,10 +1,8 @@
 name: Chat Playground CI Pipeline
 
 on:
-  push:
-    branches: ["master"]
-  pull_request:
-    branches: ["master"]
+  push: # Trigger CI on all branches
+  pull_request: # Trigger CI on all pull requests
   
 jobs:
   test:
@@ -30,4 +28,4 @@ jobs:
           # Set environtment variables for app to run
           PORT: 8686
         run: |
-          pytest -v
+          python -m pytest -v
