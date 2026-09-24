@@ -1,22 +1,22 @@
+---
 name: Chat Playground CI Pipeline
 
-on:
-  push: # Trigger CI on all branches
-  pull_request: # Trigger CI on all pull requests
-  
+"on":
+  push:  # Trigger CI on all branches
+  pull_request:  # Trigger CI on all pull requests
+
 jobs:
   test:
     runs-on: ubuntu-latest
-  
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+        
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip" #Automate pip cache to speed up for next run
+          cache: "pip"  # Automate pip cache to speed up for next run
 
       - name: Install dependencies
         run: |
