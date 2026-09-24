@@ -8,27 +8,26 @@ on:
   
 jobs:
   test:
-    run-on: ubuntu-test
+    runs-on: ubuntu-test
   
-  steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
-        cache: "pip" #Automate pip cache to speed up for next run
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip" #Automate pip cache to speed up for next run
 
-    - name: Install dependencies
-      run:|
-        python -m pip install --upgrade pip
-        if [-f requirements.txt]; then pip install -r requirements.txt; fi
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [-f requirements.txt]; then pip install -r requirements.txt; fi
 
-    - name: Run Pytest suite
-      env:
-        # Set environtment variables for app to run
-        PORT: 8686
-      run: |
-        pytest -v
-        
+      - name: Run Pytest suite
+        env:
+          # Set environtment variables for app to run
+          PORT: 8686
+        run: |
+          pytest -v
