@@ -8,8 +8,10 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.api.v1.router import api_router
 
-#Init FastAPI app
+
+# 1. Init FastAPI app
 app= FastAPI(
     title=settings.APP_NAME,
     version=settings.API_V1_STR
@@ -36,6 +38,9 @@ def read_root():
 @app.get(f"{settings.API_V1_STR}/health")
 def health_check():
     return {"status": "ok"}
+
+# 2. Mount API routes
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host = "0.0.0.0", port=settings.PORT, reload=True)
