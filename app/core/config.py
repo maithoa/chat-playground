@@ -1,5 +1,6 @@
 # Pydantic Settings for the application configuration, including default values and environment variable overrides.
 
+from functools import lru_cache
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,7 +12,7 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     API_V1_STR: str= "/api/v1"
     PORT: int=8686
-    DATASE_URL = "sqlite+aiosqlite:///./chat_playground.db"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./chat_playground.db"
 
 #  Use Pydantic V2 model config
     model_config = SettingsConfigDict(
@@ -19,5 +20,9 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore"
     )
+# LRU Cache so that Pydantic only read .env once and cache the settings for future use.
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
 
 settings = Settings()
