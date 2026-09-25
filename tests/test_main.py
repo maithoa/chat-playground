@@ -3,8 +3,6 @@ from pathlib import Path
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
-# Ensure the project root is on PYTHONPATH for imports
-sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from app.main import app
 from app.core.config import settings

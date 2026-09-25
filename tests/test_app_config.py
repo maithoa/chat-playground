@@ -3,8 +3,6 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-# Ensure the project root is on PYTHONPATH for imports
-sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from app.core.config import Settings
 
