@@ -3,11 +3,9 @@ from pathlib import Path
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
-# Ensure the project root is on PYTHONPATH for imports
-sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from app.main import app
-from app.config import settings
+from app.core.config import settings
 
 @pytest_asyncio.fixture
 async def client():
@@ -16,7 +14,7 @@ async def client():
 
 async def test_read_root(client):
     """The root endpoint should return a welcome message and docs path."""
-  
+
     response = await client.get("/")
 
     assert response.status_code == 200
@@ -30,6 +28,6 @@ async def test_health_endpoint(client):
     health_path = f"{settings.API_V1_STR}/health"
 
     response = await client.get(health_path)
-    
+
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
