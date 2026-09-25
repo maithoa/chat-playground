@@ -29,7 +29,7 @@ class MessageRead(MessageBase):
     completion_tokens: int
     total_tokens: int
     response_time_ms: float
-    create_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Message(MessageBase, table=True):
@@ -46,7 +46,8 @@ class Message(MessageBase, table=True):
     completion_tokens: int = Field(default=0)
     total_tokens: int = Field(default=0)
     response_time_ms: float = Field(default=0.0)
-    create_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Relationship to Conversation
     conversation: Optional["Conversation"] = Relationship(back_populates="messages")
@@ -58,8 +59,9 @@ class Message(MessageBase, table=True):
 
 class ConversationBase(SQLModel):
     title: Optional[str] = Field(default="New Conversation")
-    model_name: str = Field(index=True, default="Name of model used in the conversation.")
-    create_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    model_name: str = Field(index=True, default="gpt-4o")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ConversationCreate(ConversationBase):
     pass
@@ -86,5 +88,7 @@ class Conversation(ConversationBase, table=True):
     # Relationship to Messages
     messages: List[Message] = Relationship(
         back_populates="conversation",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "cascade": "all, delete-orphan"}
     )
