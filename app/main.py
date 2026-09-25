@@ -1,3 +1,4 @@
+# Entrypoint for the FastAPI application, lifespan, middleware, root routing.
 import sys
 from pathlib import Path
 
@@ -6,23 +7,23 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.config import settings
+from app.core.config import settings
 
 #Init FastAPI app
 app= FastAPI(
     title=settings.APP_NAME,
     version=settings.API_V1_STR
-    
+
 )
 
 # Add CORSMiddleweare separately
 app.add_middleware(
-    CORSMiddleware, 
+    CORSMiddleware,
     allow_origins = ["*"],
     allow_credentials = True,
     allow_methods= ["*"],
-    allow_headers= ["*"], 
-                   
+    allow_headers= ["*"],
+
 )
 
 @app.get("/")
