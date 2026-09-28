@@ -42,3 +42,19 @@ class LLMService:
             ],
         ),
     }
+
+    @classmethod
+    def get_llm_providers(cls) -> List[ProviderInfo]:
+        return list(cls.PROVIDERS_CATALOG.values())
+
+    @classmethod
+    def _get_system_key(cls, provider_id: str) -> tuple[str, str]:
+        if provider_id == "groq":
+            if not settings.GROQ_API_KEY:
+                raise ValueError("Groq API key is not configured.")
+            return settings.GROQ_API_KEY, "https://api.groq.com/openai/v1"
+        elif provider_id == "openrouter":
+            if not settings.OPENROUTER_API_KEY:
+                raise ValueError("Open Router API key is not configured.")
+            return settings.OPENROUTER_API_KEY, "https://openrouter.ai/api/v1"
+        return ValueError(f"Not supported llm provider: {provider_id}")
