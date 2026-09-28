@@ -6,7 +6,8 @@ name: Chat Playground CI Pipeline
   pull_request: # Trigger CI on all pull requests
 
 jobs:
-  test:
+  backend-test:
+    name: Backend Unit Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -29,3 +30,27 @@ jobs:
           PORT: 8686
         run: |
           python -m pytest -v
+
+  frontend-test:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run Frontend Tests
+        run: |
+          cd frontend
+          npm run test:ci
