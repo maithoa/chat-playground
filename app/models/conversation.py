@@ -17,21 +17,23 @@ class MessageRole(str, Enum):
 class MessageBase(SQLModel):
     role: MessageRole
     content: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class MessageCreate(MessageBase):
+    """Payload schema for creating a new message. """
     pass
 
 class MessageRead(MessageBase):
+    """Payload schema for returning message data from the database."""
     id: int
     conversation_id: int
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
     response_time_ms: float
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime
+    updated_at: datetime
 
+# ORM Entity in DB
 class Message(MessageBase, table=True):
     __tablename__ = "messages"
 
@@ -60,23 +62,23 @@ class Message(MessageBase, table=True):
 class ConversationBase(SQLModel):
     title: Optional[str] = Field(default="New Conversation")
     model_name: str = Field(index=True, default="gpt-4o")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ConversationCreate(ConversationBase):
+    """Payload schema for creating a new conversation."""
     pass
 
 # Schema for reading conversations without messages
 class ConversationRead(ConversationBase):
     id: int
     total_tokens: int = Field(default=0)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime
+    updated_at: datetime
 
 # Schema for reading a conversation along with its messages
 class ConversationWithMessages(ConversationRead):
     messages: List[MessageRead] = []
 
+# ORM Entity in DB
 class Conversation(ConversationBase, table=True):
     __tablename__ = "conversations"
 
