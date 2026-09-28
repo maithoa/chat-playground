@@ -3,6 +3,7 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
+import sqlmodel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
@@ -33,3 +34,4 @@ async def init_db() -> None:
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         yield session
+
