@@ -19,12 +19,14 @@ jobs:
           python-version: "3.12"
           cache: "pip" # Automate pip cache to speed up for next run
 
-      - name: Install dependencies
+      - name: Install Backend dependencies
+        working-directory: backend
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Run Pytest suite
+      - name: Run Backend Pytest suite
+        working-directory: backend
         env:
           # Set environtment variables for app to run
           PORT: 8686
@@ -46,11 +48,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install Frontend Dependencies
+        working-directory: frontend
         run: |
-          cd frontend
           npm ci
 
       - name: Run Frontend Tests
+        working-directory: frontend
         run: |
-          cd frontend
           npm run test:ci
