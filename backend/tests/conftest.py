@@ -8,7 +8,7 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 # Import all models to ensure they are registered with SQLModel
-from backend.app.main import app
+from app.main import app
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
