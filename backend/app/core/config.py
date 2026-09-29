@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     PORT: int = 8686
     DATABASE_URL: str = "sqlite+aiosqlite:///./chat_playground.db"
 
+    # Clould LLM Provider API keys
+    OPENAI_API_KEY: str | None = None
+    GROQ_API_KEY: str | None = None
+    OPENROUTER_API_KEY: str | None = None
+
     #  Use Pydantic V2 model config
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env", env_file_encoding="utf-8", extra="ignore"
