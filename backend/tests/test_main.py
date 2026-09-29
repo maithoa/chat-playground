@@ -5,8 +5,8 @@ import asyncio
 from httpx import AsyncClient, ASGITransport
 
 
-from app.main import app
-from app.core.config import settings
+from backend.app.main import app
+from backend.app.core.config import settings
 
 
 @pytest.mark.anyio
