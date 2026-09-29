@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     GROQ_API_KEY: str | None = None
     OPENROUTER_API_KEY: str | None = None
+    GOOGLE_API_KEY: str | None = None
 
     #  Use Pydantic V2 model config
     model_config = SettingsConfigDict(
