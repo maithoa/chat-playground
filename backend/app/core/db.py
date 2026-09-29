@@ -22,16 +22,17 @@ async_session_maker = sessionmaker(
     expire_on_commit=False,
 )
 
+
 # 3. Create table automatically (Called when Startup)
 async def init_db() -> None:
     async with async_engine.begin() as conn:
-        #Import models for SQLModel to register tables metadata
+        # Import models for SQLModel to register tables metadata
         import app.models.conversation
 
         await conn.run_sync(SQLModel.metadata.create_all)
+
 
 # 4. Dependency Injection for endpoints
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         yield session
-

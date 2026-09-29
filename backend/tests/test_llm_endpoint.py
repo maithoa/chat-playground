@@ -9,7 +9,7 @@ application instance defined in ``app.main``.
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.llm_service import LLMService
+from app.services.llm.service import LLMService
 
 
 def test_list_providers_returns_catalog() -> None:

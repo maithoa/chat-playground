@@ -1,6 +1,7 @@
 # All routers of v1
 from fastapi import APIRouter
-from app.api.v1.endpoints import conversations, llm
+from app.api.v1.endpoints import llm
+from app.api.v1.endpoints import conversations
 
 api_router = APIRouter()
 

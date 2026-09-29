@@ -39,3 +39,15 @@
 - Add CONTRIBUTING guide (how to contribute, issue/PR process)
 - Create `.env.example` with required environment variables
 - Document the ADRs and domain model in `docs/adr/`
+
+## 8 LLM Service architech
+[ FastAPI Route ]
+       │
+       ▼
+[ LLMService ] (Orchestrator)
+       │
+       ├──► [ Client Registry / Cache ] (Lưu trữ các Handler/Client đã khởi tạo)
+       │
+       └──► [ Provider Handler ] (OpenAIHandler / AnthropicHandler / OllamaHandler)
+                 │
+                 └──► Reuse httpx.AsyncClient / AsyncSDK (Connection Pool)

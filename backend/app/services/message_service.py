@@ -5,10 +5,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.conversation import Conversation, Message, MessageCreate, MessageRead
 
+
 class MessageService:
     @staticmethod
-    async def get_conversation_messages(session: AsyncSession,
-                                            conversation_id: int) -> Sequence[Message]:
+    async def get_conversation_messages(
+        session: AsyncSession, conversation_id: int
+    ) -> Sequence[Message]:
         """
         Retrieve all messages for a specific conversation order chronologically.
         """
@@ -21,7 +23,9 @@ class MessageService:
         return result.all()
 
     @staticmethod
-    async def get_message_by_id(session: AsyncSession, message_id: int) -> Optional[Message]:
+    async def get_message_by_id(
+        session: AsyncSession, message_id: int
+    ) -> Optional[Message]:
         """
         Retrieve a specific message by its ID from the database.
         """
@@ -36,7 +40,8 @@ class MessageService:
         payload: MessageCreate,
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
-        response_time_ms: float = 0.0) -> Message:
+        response_time_ms: float = 0.0,
+    ) -> Message:
         """
         Create a new message and aggregate token counts and updated timestamp on the parent conversation.
         """
@@ -58,8 +63,6 @@ class MessageService:
             response_time_ms=response_time_ms,
         )
 
-
-
         # Update the conversation's total tokens and updated_at timestamp
         conversation.total_tokens += new_message.total_tokens
         conversation.updated_at = datetime.now(timezone.utc)
@@ -67,7 +70,7 @@ class MessageService:
         session.add(new_message)
         session.add(conversation)
 
-         # Ensure the conversation is updated in the session
+        # Ensure the conversation is updated in the session
         await session.commit()
         await session.refresh(new_message)
 
