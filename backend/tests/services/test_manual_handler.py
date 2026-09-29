@@ -16,7 +16,7 @@ async def main():
     # model = "nvidia/nemotron-3.5-lightning:free"
     # model = "stealth/space-bunny-alpha"
     # model = "gemini-3.5-flash-lite"
-    # model = "gemini-3.1-pro-preview"
+    model = "gemini-3.1-pro-preview"
 
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
