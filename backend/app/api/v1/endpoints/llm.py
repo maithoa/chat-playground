@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter
-from app.schemas.llm import ProviderInfo
-from app.services.llm_service import LLMService
+from backend.app.schemas.llm import ProviderInfo
+from backend.app.services.llm.service import LLMService
 
 router = APIRouter(prefix="/llm", tags=["LLM Catalog"])
 
