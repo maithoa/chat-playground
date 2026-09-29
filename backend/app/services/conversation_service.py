@@ -4,6 +4,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.conversation import Conversation, ConversationCreate
 
+
 class ConversationService:
     @staticmethod
     async def get_all_conversations(session: AsyncSession) -> Sequence[Conversation]:
@@ -15,8 +16,9 @@ class ConversationService:
         return result.all()
 
     @staticmethod
-    async def create_conversation(session:AsyncSession,
-                                  payload: ConversationCreate)-> Conversation:
+    async def create_conversation(
+        session: AsyncSession, payload: ConversationCreate
+    ) -> Conversation:
         """
         Create a new conversation in the database.
         """

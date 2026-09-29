@@ -15,7 +15,7 @@ async def test_create_conversation_and_messages(async_session: AsyncSession):
     await async_session.refresh(conv)
 
     msg = Message(
-        conversation = conv,
+        conversation=conv,
         role=MessageRole.USER,
         content="Hello AI",
         prompt_tokens=10,
@@ -48,9 +48,7 @@ async def test_cascade_delete_messages(async_session: AsyncSession):
     async_session.add(conv)
     await async_session.commit()
 
-    msg = Message(
-        conversation_id=conv.id, role=MessageRole.USER, content="Bye world"
-    )
+    msg = Message(conversation_id=conv.id, role=MessageRole.USER, content="Bye world")
     async_session.add(msg)
     await async_session.commit()
 

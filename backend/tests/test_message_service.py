@@ -9,6 +9,7 @@ from app.services.message_service import MessageService
 
 # --- Fixtures ---
 
+
 @pytest.fixture
 def mock_session():
     """Return a fresh AsyncMock mimicking ``AsyncSession``.
@@ -16,6 +17,7 @@ def mock_session():
     Each test gets its own instance to avoid cross‑test state leakage.
     """
     return AsyncMock(spec=AsyncSession)
+
 
 @pytest.fixture
 def mock_conversation():
@@ -25,12 +27,13 @@ def mock_conversation():
     accessed by ``MessageService``.
     """
     from datetime import datetime, timezone
+
     return Conversation(id=1, total_tokens=100, updated_at=datetime.now(timezone.utc))
+
 
 @pytest.fixture
 def mock_message_create():
-    """Return a ``MessageCreate`` instance for ``add_message_to_conversation``.
-    """
+    """Return a ``MessageCreate`` instance for ``add_message_to_conversation``."""
     return MessageCreate(
         content="Test content",
         sender_id=1,
@@ -38,7 +41,9 @@ def mock_message_create():
         role=MessageRole.USER,
     )
 
+
 # --- Test Class ---
+
 
 class TestMessageService:
     """Test suite for :class:`MessageService`."""
@@ -69,8 +74,7 @@ class TestMessageService:
 
     @pytest.mark.asyncio
     async def test_get_message_by_id_returns_message_or_none(self, mock_session):
-        """``get_message_by_id`` should return a single message or ``None``.
-        """
+        """``get_message_by_id`` should return a single message or ``None``."""
         # Successful lookup
         mock_msg = Message(id=10, conversation_id=2, content="Found")
         mock_result_success = MagicMock()
@@ -89,7 +93,9 @@ class TestMessageService:
         assert result_none is None
 
     @pytest.mark.asyncio
-    async def test_add_message_to_conversation_creates_and_updates(self, mock_session, mock_conversation, mock_message_create):
+    async def test_add_message_to_conversation_creates_and_updates(
+        self, mock_session, mock_conversation, mock_message_create
+    ):
         """``add_message_to_conversation`` should create a Message, update the parent Conversation,
         and persist both via the session.
         """
@@ -128,7 +134,9 @@ class TestMessageService:
         mock_session.refresh.assert_awaited_once_with(new_msg)
 
     @pytest.mark.asyncio
-    async def test_add_message_to_conversation_invalid_conversation_raises(self, mock_session, mock_message_create):
+    async def test_add_message_to_conversation_invalid_conversation_raises(
+        self, mock_session, mock_message_create
+    ):
         """When the specified conversation does not exist, ``add_message_to_conversation``
         should raise a ``ValueError``.
 

@@ -18,6 +18,7 @@ def test_default_settings():
     # Port is defined as an int; ensure it's the default
     assert isinstance(config.PORT, int)
 
+
 def test_env_override(monkeypatch):
     """Ensure environment variables correctly override default values."""
     # Mock the environment variables
@@ -28,9 +29,10 @@ def test_env_override(monkeypatch):
     assert config.PORT == 9898
     assert config.APP_NAME == "Test APP"
 
+
 def test_invalid_port_type(monkeypatch):
     """Ensure validation error is raised when port is not integer"""
-    monkeypatch.setenv("PORT","somestring")
+    monkeypatch.setenv("PORT", "somestring")
 
     with pytest.raises(ValidationError):
         Settings()
