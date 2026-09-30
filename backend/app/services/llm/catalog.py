@@ -23,8 +23,13 @@ PROVIDERS_CATALOG: Dict[str, ProviderInfo] = {
         name="Groq Cloud",
         models=[
             ModelInfo(
-                id="llama-3.3-70b-versatile",
-                name="Llama 3.3 70B",
+                id="openai/gpt-oss-120b",
+                name="GPT OSS 120B",
+                context_window=128000,
+            ),
+            ModelInfo(
+                id="qwen/qwen3.8-27b",
+                name="Qwen 3.8-27B",
                 context_window=128000,
             ),
         ],
@@ -49,16 +54,6 @@ PROVIDERS_CATALOG: Dict[str, ProviderInfo] = {
         id="openrouter",
         name="Open Router Free Tier",
         models=[
-            ModelInfo(
-                id="meta-llama/llama-3.1-8b-instruct:free",
-                name="Llama 3.1 8B (Free)",
-                context_window=128000,
-            ),
-            ModelInfo(
-                id="google/gemma-2-9b-it:free",
-                name="Gemma 2 9B (Free)",
-                context_window=128000,
-            ),
             ModelInfo(
                 id="openrouter/free",
                 name="Open Router Free",
