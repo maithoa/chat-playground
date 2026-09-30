@@ -9,8 +9,7 @@ class MockChunk:
         self.choices = [MagicMock(delta=MagicMock(content=content))]
 
 
-@pytest.mark.asyncio
-async def test_openrouter_handler_stream_chat_success():
+def test_openrouter_handler_stream_chat_success():
     # Mock the chunk data returned by OpenRouter API
     mock_chunks = [
         MockChunk("Hello"),
@@ -38,10 +37,15 @@ async def test_openrouter_handler_stream_chat_success():
         messages = [{"role": "user", "content": "Hi"}]
         result = []
 
-        async for chunk in handler.stream_chat(
-            model="openrouter/gpt-4", messages=messages
-        ):
-            result.append(chunk)
+        async def _run():
+            async for chunk in handler.stream_chat(
+                model="openrouter/gpt-4", messages=messages
+            ):
+                result.append(chunk)
+
+        import asyncio
+
+        asyncio.run(_run())
 
         assert result == ["Hello", ",", "how", "are", "you", "?"]
         mock_client.chat.completions.create.assert_called_once_with(

@@ -42,6 +42,10 @@ class LLMService:
         if not handler:
             raise ValueError(f"Provider {provider} does not have API key configured.")
 
+        # ``handler.stream_chat`` is expected to be an async generator. We simply
+        # iterate over it directly. Tests mock this method with a ``MagicMock``
+        # that returns an async generator, so no special await handling is
+        # required.
         async for chunk in handler.stream_chat(
             model=model, messages=messages, **kwargs
         ):
