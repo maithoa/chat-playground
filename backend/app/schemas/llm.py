@@ -20,7 +20,11 @@ class ProviderInfo(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    provider: str = Field(..., example="google", description="Provider ID")
-    model: str = Field(..., example="gemini-3.5-flash", description="Model ID")
+    provider: str = Field(
+        ..., json_schema_extra={"example": "google"}, description="Provider ID"
+    )
+    model: str = Field(
+        ..., json_schema_extra={"example": "gemini-3.5-flash"}, description="Model ID"
+    )
     messages: List[MessageBase] = Field(..., description="message history")
     temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0)
