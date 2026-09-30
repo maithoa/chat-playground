@@ -35,3 +35,17 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+"""
+curl -N -X POST "http://localhost:8686/api/v1/llm/chat"
+-H "Content-Type: application/json"
+-d '{'
+    '"provider":"openrouter", '
+    '"model":"openai/gpt-oss-120b", '
+    '"messages": ['
+    '{"role": "system", "content":"You are an AI assistant who talks short and precise."}, '
+    '{"role":"user", "content":"What is the shape of the earth?"}'
+    '],'
+'}'
+
+"""

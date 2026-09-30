@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from unittest.mock import MagicMock, AsyncMock
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -48,8 +49,7 @@ def mock_message_create():
 class TestMessageService:
     """Test suite for :class:`MessageService`."""
 
-    @pytest.mark.asyncio
-    async def test_get_conversation_messages_returns_list(self, mock_session):
+    def test_get_conversation_messages_returns_list(self, mock_session):
         """``get_conversation_messages`` should return all messages for a conversation.
 
         The session ``exec`` call is mocked to return a result whose ``all``
@@ -63,17 +63,19 @@ class TestMessageService:
         mock_session.exec.return_value = mock_result
 
         # Act
-        messages = await MessageService.get_conversation_messages(
-            session=mock_session, conversation_id=1
-        )
+        async def _run():
+            return await MessageService.get_conversation_messages(
+                session=mock_session, conversation_id=1
+            )
+
+        messages = asyncio.run(_run())
 
         # Assert
         assert isinstance(messages, list)
         assert messages == [mock_msg1, mock_msg2]
         mock_session.exec.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_get_message_by_id_returns_message_or_none(self, mock_session):
+    def test_get_message_by_id_returns_message_or_none(self, mock_session):
         """``get_message_by_id`` should return a single message or ``None``."""
         # Successful lookup
         mock_msg = Message(id=10, conversation_id=2, content="Found")
@@ -81,7 +83,10 @@ class TestMessageService:
         mock_result_success.first.return_value = mock_msg
         mock_session.exec.return_value = mock_result_success
 
-        result = await MessageService.get_message_by_id(mock_session, 10)
+        async def _run():
+            return await MessageService.get_message_by_id(mock_session, 10)
+
+        result = asyncio.run(_run())
         assert result is mock_msg
 
         # Not‑found case
@@ -89,11 +94,13 @@ class TestMessageService:
         mock_result_none.first.return_value = None
         mock_session.exec.return_value = mock_result_none
 
-        result_none = await MessageService.get_message_by_id(mock_session, 99)
+        async def _run_none():
+            return await MessageService.get_message_by_id(mock_session, 99)
+
+        result_none = asyncio.run(_run_none())
         assert result_none is None
 
-    @pytest.mark.asyncio
-    async def test_add_message_to_conversation_creates_and_updates(
+    def test_add_message_to_conversation_creates_and_updates(
         self, mock_session, mock_conversation, mock_message_create
     ):
         """``add_message_to_conversation`` should create a Message, update the parent Conversation,
@@ -106,14 +113,17 @@ class TestMessageService:
         mock_session.exec.return_value = mock_conv_result
 
         # Act
-        new_msg = await MessageService.add_message_to_conversation(
-            session=mock_session,
-            conversation_id=mock_conversation.id,
-            payload=mock_message_create,
-            prompt_tokens=5,
-            completion_tokens=15,
-            response_time_ms=123.4,
-        )
+        async def _run():
+            return await MessageService.add_message_to_conversation(
+                session=mock_session,
+                conversation_id=mock_conversation.id,
+                payload=mock_message_create,
+                prompt_tokens=5,
+                completion_tokens=15,
+                response_time_ms=123.4,
+            )
+
+        new_msg = asyncio.run(_run())
 
         # Assertions on the returned Message
         assert isinstance(new_msg, Message)
@@ -133,8 +143,7 @@ class TestMessageService:
         mock_session.commit.assert_awaited_once()
         mock_session.refresh.assert_awaited_once_with(new_msg)
 
-    @pytest.mark.asyncio
-    async def test_add_message_to_conversation_invalid_conversation_raises(
+    def test_add_message_to_conversation_invalid_conversation_raises(
         self, mock_session, mock_message_create
     ):
         """When the specified conversation does not exist, ``add_message_to_conversation``
@@ -149,8 +158,8 @@ class TestMessageService:
         mock_conv_result.first.return_value = None
         mock_session.exec.return_value = mock_conv_result
 
-        with pytest.raises(ValueError) as exc_info:
-            await MessageService.add_message_to_conversation(
+        async def _run():
+            return await MessageService.add_message_to_conversation(
                 session=mock_session,
                 conversation_id=999,  # non‑existent ID
                 payload=mock_message_create,
@@ -158,5 +167,8 @@ class TestMessageService:
                 completion_tokens=0,
                 response_time_ms=0.0,
             )
+
+        with pytest.raises(ValueError) as exc_info:
+            asyncio.run(_run())
 
         assert "Conversation with id 999 does not exist" in str(exc_info.value)

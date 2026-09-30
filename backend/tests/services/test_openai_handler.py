@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.llm.openai_handler import OpenAIHandler
 
@@ -9,8 +10,7 @@ class MockChunk:
         self.choices = [MagicMock(delta=MagicMock(content=content))]
 
 
-@pytest.mark.asyncio
-async def test_openai_handler_stream_chat_success():
+def test_openai_handler_stream_chat_success():
     # Mock the chunk data returned by openai api
     mock_chunks = [
         MockChunk("Hello"),
@@ -39,8 +39,11 @@ async def test_openai_handler_stream_chat_success():
         result = []
 
         # Call openai_handler streamchat function
-        async for chunk in handler.stream_chat(model="gpt-4o", messages=messages):
-            result.append(chunk)
+        async def _run():
+            async for chunk in handler.stream_chat(model="gpt-4o", messages=messages):
+                result.append(chunk)
+
+        asyncio.run(_run())
 
         # Assertions
         assert result == ["Hello", ",", "how", "are", "you", "?"]

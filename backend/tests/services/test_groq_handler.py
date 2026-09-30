@@ -9,8 +9,7 @@ class MockChunk:
         self.choices = [MagicMock(delta=MagicMock(content=content))]
 
 
-@pytest.mark.asyncio
-async def test_groq_handler_stream_chat_success():
+def test_groq_handler_stream_chat_success():
     # Mock the chunk data returned by groq api
     mock_chunks = [
         MockChunk("Hello"),
@@ -39,10 +38,15 @@ async def test_groq_handler_stream_chat_success():
         result = []
 
         # Call openai_handler streamchat function
-        async for chunk in handler.stream_chat(
-            model="openai/gpt-oss-120b", messages=messages
-        ):
-            result.append(chunk)
+        async def _run():
+            async for chunk in handler.stream_chat(
+                model="openai/gpt-oss-120b", messages=messages
+            ):
+                result.append(chunk)
+
+        import asyncio
+
+        asyncio.run(_run())
 
         # Assertions
         assert result == ["Hello", ",", "how", "are", "you", "?"]
