@@ -59,6 +59,11 @@ PROVIDERS_CATALOG: Dict[str, ProviderInfo] = {
                 name="Gemma 2 9B (Free)",
                 context_window=128000,
             ),
+            ModelInfo(
+                id="openrouter/free",
+                name="Open Router Free",
+                context_window=128000,
+            ),
         ],
     ),
 }
