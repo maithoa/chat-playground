@@ -34,8 +34,8 @@ PROVIDERS_CATALOG: Dict[str, ProviderInfo] = {
         name="Google Gemini",
         models=[
             ModelInfo(
-                id="gemini-2.0-flash",
-                name="Gemini 2.0 Flash",
+                id="gemini-3.5-flash",
+                name="Gemini 3.5 Flash",
                 context_window=1048576,
             ),
             ModelInfo(
