@@ -54,7 +54,22 @@ class GoogleHandler(BaseLLMHandler):
     ) -> AsyncGenerator[str, None]:
         contents = self._prepare_payload(messages)
 
+        # Check the parameters for model config from kwargs
+        temperature = kwargs.pop("temperature", None)
+        top_p = kwargs.pop("top_p", None)
+        top_k = kwargs.pop("top_k", None)
+        max_output_tokens = kwargs.pop("max_output_tokens", None)
+
         config = kwargs.pop("config", None) or types.GenerateContentConfig()
+
+        if temperature is not None:
+            config.temperature = temperature
+        if top_p is not None:
+            config.top_p = top_p
+        if top_k is not None:
+            config.top_k = top_k
+        if max_output_tokens is not None:
+            config.max_output_tokens = max_output_tokens
 
         config.automatic_function_calling = types.AutomaticFunctionCallingConfig(
             disable=True
