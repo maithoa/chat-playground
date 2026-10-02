@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import type { ProviderInfo } from "../types/llm";
+import { env } from "../config/env"
+
 
 interface ModelSelectorProps {
     onSelect: (providerId: string, modelId: string) => void;
@@ -16,15 +18,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
-    const API_BASE_URL =
-        import.meta.env.VITE_API_BASE_URL || "http://localhost:8686/api/v1";
+    const providersEndpoint = `${env.API_BASE_URL}/llm/providers`;
 
     useEffect(() => {
         const fetchProviders = async () => {
             try {
                 setLoading(true);
 
-                const res = await fetch(`${API_BASE_URL}/llm/providers`);
+                const res = await fetch(providersEndpoint);
                 if (!res.ok) throw new Error("Could not connect to backend for fetching LLM providers info.");
 
                 const data: ProviderInfo[] = await res.json();

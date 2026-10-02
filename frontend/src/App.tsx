@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { ModelSelector } from './components/ModelSelector';
 import './App.css'
 import { ChatBox } from './components/ChatBox';
 
@@ -15,11 +14,6 @@ function App() {
       <header className="bg-white border-b p-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-800">LLM Chat Playground</h1>
-          <ModelSelector
-            onSelect={(providerId, modelId) => {
-              setSelected({ provider: providerId, model: modelId });
-            }}
-          />
         </div>
       </header>
 
