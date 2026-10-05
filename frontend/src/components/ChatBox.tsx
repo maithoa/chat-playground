@@ -27,6 +27,17 @@ export function ChatBox() {
     scrollToBottom();
   }, [messages]);
 
+  // Ref to access textarea for auto-focus
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    // Reset the height to auto to shrink if needed
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
+
   const handleSubmit = async (providerId: string, modelId: string) => {
     if (!input.trim() || isGenerating) return;
 
@@ -143,17 +154,21 @@ export function ChatBox() {
 
       {/* Input & Action Area */}
       <form onSubmit={(e) => e.preventDefault()} className="flex-shrink-0 space-y-2">
-        <div className="flex gap-2">
+        <div className="border border-gray-300 rounded-2xl p-3 focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-sm flex flex-col transition-all">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message...(Enter to Send, Shift+Enter for a new line)"
-            className="flex-1 border border-gray-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border-0 focus:outline-none focus:ring-0 p-0 text-sm leading-relaxed resize-none max-h-48 overflow-y-auto block bg-transparent text-gray-800 placeholder-gray-400"
             rows={2}
             disabled={isGenerating}
           />
-          <div ref={sendWrapperRef}>
+          <div
+            ref={sendWrapperRef}
+            className="flex justify-end items-center pt-2 mt-1 border-t border-gray-100"
+          >
             <SendMsgToModel
               disabled={isGenerating || !input.trim()}
               onSend={(provider, model) => handleSubmit(provider, model)}
