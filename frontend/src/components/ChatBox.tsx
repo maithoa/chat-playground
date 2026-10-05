@@ -1,8 +1,11 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { streamChat } from "../services/llmService";
 import type { Message } from "../types/chat";
 import { SendMsgToModel } from "./SendMsgToModel";
 import { ConversationTokenCounter } from "./ConversationTokenCounter";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Coffee } from "lucide-react";
 
 export function ChatBox() {
   const [temperature, setTemperature] = useState(0.7);
@@ -90,19 +93,36 @@ export function ChatBox() {
     <div className="flex flex-1 flex-col min-h-0 max-w-3xl mx-auto p-4 overflow-hidden">
       {/* Messages Feed */}
       <div className="flex-1 min-h-0 overflow-y-auto rounded mb-4 space-y-4 space-x-4 flex flex-col">
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            // setting the background color based on the role of the message
-            className={`flex flex-col p-4 rounded-lg max-w-[80%] ${
-              msg.role === "user"
-                ? "bg-blue-500 text-white self-end"
-                : "bg-gray-100 text-gray-800 self-start"
-            }`}
-          >
-            <span className="whitespace-pre-wrap">{msg.content}</span>
-          </div>
-        ))}
+        {messages.map((msg, index) => {
+          const isUser = msg.role === "user";
+          return (
+            /* 1. Outer Chat Bubble (Handles background, padding, alignment) */
+            <div
+              key={index}
+              className={`p-4 rounded-lg max-w-[85%] ${
+                isUser
+                  ? "bg-blue-600 text-white self-end"
+                  : "bg-gray-100 text-gray-800 self-start"
+              }`}
+            >
+              {/* 2. Inner Typography Wrapper (Handles Markdown styling) */}
+              <div
+                className={`prose prose-sm max-w-none ${
+                  isUser ? "prose-invert" : "prose-neutral"
+                }`}
+              >
+                {msg.content ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                ) : isUser ? null : (
+                  <span className="flex items-center gap-1.5 text-gray-800 animate-pulse text-xs font-medium">
+                    <Coffee />
+                    Thinking....
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
