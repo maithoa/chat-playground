@@ -1,8 +1,7 @@
-import './App.css'
-import { ChatBox } from './components/ChatBox';
+import "./App.css";
+import { ChatBox } from "./components/ChatBox";
 
 function App() {
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header contains Model Selector */}
@@ -14,12 +13,10 @@ function App() {
 
       {/* Main Chat Interface */}
       <main className="flex-1 max-w-3xl w-full mx-auto p-4">
-        <ChatBox
-
-        />
+        <ChatBox />
       </main>
     </div>
   );
 }
 
-export default App
+export default App;

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { streamChat } from "../services/llmService";
 import type { Message } from "../types/chat";
 import { SendMsgToModel } from "./SendMsgToModel";
-
+import { ConversationTokenCounter } from "./ConversationTokenCounter";
 
 export function ChatBox() {
   const [temperature, setTemperature] = useState(0.7);
@@ -25,10 +25,11 @@ export function ChatBox() {
   const handleSend = async (providerId: string, modelId: string) => {
     if (!input.trim() || isGenerating) return;
 
+    // form the message object and update the messages state
     const userMessage: Message = { role: "user", content: input };
     const updatedMessages = [...messages, userMessage];
 
-    // Cập nhật tin nhắn User và tạo khung rỗng cho Assistant
+    // add an empty assistant message to the state to prepare for streaming
     setMessages([...updatedMessages, { role: "assistant", content: "" }]);
     setInput("");
     setIsGenerating(true);
@@ -37,7 +38,7 @@ export function ChatBox() {
 
     try {
       await streamChat({
-        provider : providerId,
+        provider: providerId,
         model: modelId,
         messages: updatedMessages,
         temperature: temperature,
@@ -79,14 +80,12 @@ export function ChatBox() {
 
   return (
     <div className="flex flex-col h-screen max-w-3xl mx-auto p-4">
-
-
       {/* Messages Feed */}
       <div className="flex-1 overflow-y-auto border p-4 rounded mb-4 space-y-4 flex flex-col">
         {messages.map((msg, index) => (
           <div
             key={index}
-            // Sửa class Tailwind: self-end chuẩn vị trí
+            // setting the background color based on the role of the message
             className={`p-3 rounded-lg max-w-[80%] ${
               msg.role === "user"
                 ? "bg-blue-500 text-white self-end"
@@ -99,27 +98,42 @@ export function ChatBox() {
         ))}
         <div ref={messagesEndRef} />
       </div>
-
+      <div className="flex gap-2">
+        {/* Token counter*/}
+        <ConversationTokenCounter
+          messages={messages}
+          streamingContent={messages[messages.length - 1]?.content || ""}
+          isStreaming={isGenerating}
+        />
+        {/* Stop button */}
+        {isGenerating && (
+          <button
+            onClick={handleStop}
+            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+          >
+            Stop
+          </button>
+        )}
+      </div>
       {/* Input & Action Area */}
       <div className="flex gap-2">
-          <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                  // ... Enter to Send logic
-              }}
-              placeholder="Type a message..."
-              className="flex-1 border border-gray-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={2}
-              disabled={isGenerating}
-          />
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            // ... Enter to Send logic
+          }}
+          placeholder="Type a message..."
+          className="flex-1 border border-gray-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows={2}
+          disabled={isGenerating}
+        />
 
-          <SendMsgToModel
-              disabled={isGenerating || !input.trim()}
-              onSend={(provider, model) => handleSend(provider, model)}
-          />
+        <SendMsgToModel
+          disabled={isGenerating || !input.trim()}
+          onSend={(provider, model) => handleSend(provider, model)}
+        />
       </div>
-
     </div>
   );
 }
