@@ -1,12 +1,7 @@
-import { useState } from 'react'
 import './App.css'
 import { ChatBox } from './components/ChatBox';
 
 function App() {
-  const [selected, setSelected] = useState<{ provider: string; model: string }>({
-    provider: "",
-    model: "",
-  });
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -20,8 +15,7 @@ function App() {
       {/* Main Chat Interface */}
       <main className="flex-1 max-w-3xl w-full mx-auto p-4">
         <ChatBox
-          provider={selected.provider}
-          model={selected.model}
+
         />
       </main>
     </div>
