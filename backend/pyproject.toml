@@ -26,6 +26,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "asyncio>=4.0.0",
+    "pytest-asyncio>=0.21.0",
     "black>=24.0.0",
     "ruff>=0.3.0"
 ]
@@ -35,5 +36,6 @@ where = ["."]
 include = ["app*"]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 pythonpath = ["."]
 testpaths = ["tests"]

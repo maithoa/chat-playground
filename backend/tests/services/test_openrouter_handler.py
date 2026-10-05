@@ -1,56 +1,113 @@
 import pytest
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.llm.openrouter_handler import OpenRouterHandler
+from openai.types.completion_usage import CompletionUsage
 
 
-# Helper class that mocks the Chunk returned from OpenRouter API
+# Helper class to mock a chunk returned from the OpenRouter API, optionally with usage data
 class MockChunk:
-    def __init__(self, content: str | None):
+    def __init__(self, content: str | None, usage: CompletionUsage | None = None):
+        # The handler accesses ``chunk.choices[0].delta.content``
         self.choices = [MagicMock(delta=MagicMock(content=content))]
+        # ``chunk.usage`` may be ``None`` or a ``CompletionUsage`` instance
+        self.usage = usage
 
 
-def test_openrouter_handler_stream_chat_success():
-    # Mock the chunk data returned by OpenRouter API
-    mock_chunks = [
-        MockChunk("Hello"),
-        MockChunk(","),
-        MockChunk("how"),
-        MockChunk("are"),
-        MockChunk("you"),
-        MockChunk("?"),
-        MockChunk(None),
-    ]
+def _mock_client(chunks):
+    """Create an AsyncMock client that yields the provided ``chunks``.
+
+    The OpenRouterHandler calls ``self.client.chat.completions.create`` and then
+    iterates over the returned async generator.  Here we replace ``create`` with
+    an ``AsyncMock`` that returns an async generator yielding the supplied
+    ``chunks``.
+    """
 
     async def mock_stream():
-        for chunk in mock_chunks:
-            yield chunk
+        for c in chunks:
+            yield c
 
-    mock_client = AsyncMock()
-    mock_client.chat.completions.create = AsyncMock(return_value=mock_stream())
+    client = AsyncMock()
+    client.chat.completions.create = AsyncMock(return_value=mock_stream())
+    return client
 
-    # Patch AsyncOpenAI in the module
+
+@pytest.mark.asyncio
+async def test_openrouter_handler_stream_chat_with_async_usage_callback():
+    """Ensure that an async ``on_usage_complete`` callback receives the correct data."""
+
+    usage = CompletionUsage(prompt_tokens=5, completion_tokens=10, total_tokens=15)
+    chunks = [
+        MockChunk("Hello"),
+        MockChunk(","),
+        MockChunk("world"),
+        MockChunk(None, usage=usage),
+    ]
+
+    mock_client = _mock_client(chunks)
+
+    async_usage_data = []
+
+    async def async_callback(data):
+        async_usage_data.append(data)
+
     with patch(
         "app.services.llm.openrouter_handler.AsyncOpenAI", return_value=mock_client
     ):
         handler = OpenRouterHandler(api_key="sk-test-key")
-
         messages = [{"role": "user", "content": "Hi"}]
         result = []
+        async for chunk in handler.stream_chat(
+            model="openrouter/gpt-4",
+            messages=messages,
+            on_usage_complete=async_callback,
+            include_usage=True,
+        ):
+            result.append(chunk)
 
-        async def _run():
-            async for chunk in handler.stream_chat(
-                model="openrouter/gpt-4", messages=messages
-            ):
-                result.append(chunk)
+    # Verify streamed content (excluding the final ``None`` chunk)
+    assert result == ["Hello", ",", "world"]
+    # Verify the async callback was invoked exactly once with the expected dict
+    assert async_usage_data == [
+        {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
+    ]
 
-        import asyncio
 
-        asyncio.run(_run())
+@pytest.mark.asyncio
+async def test_openrouter_handler_stream_chat_with_sync_usage_callback():
+    """Ensure that a regular (sync) ``on_usage_complete`` callback is also supported."""
 
-        assert result == ["Hello", ",", "how", "are", "you", "?"]
-        mock_client.chat.completions.create.assert_called_once_with(
-            model="openrouter/gpt-4", messages=messages, stream=True
-        )
+    usage = CompletionUsage(prompt_tokens=2, completion_tokens=3, total_tokens=5)
+    chunks = [
+        MockChunk("Test"),
+        MockChunk(None, usage=usage),
+    ]
+
+    mock_client = _mock_client(chunks)
+
+    sync_usage_data = []
+
+    def sync_callback(data):
+        sync_usage_data.append(data)
+
+    with patch(
+        "app.services.llm.openrouter_handler.AsyncOpenAI", return_value=mock_client
+    ):
+        handler = OpenRouterHandler(api_key="sk-test-key")
+        messages = [{"role": "user", "content": "Hello"}]
+        result = []
+        async for chunk in handler.stream_chat(
+            model="openrouter/gpt-4",
+            messages=messages,
+            on_usage_complete=sync_callback,
+            include_usage=True,
+        ):
+            result.append(chunk)
+
+    assert result == ["Test"]
+    assert sync_usage_data == [
+        {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5}
+    ]
 
 
 def test_openrouter_handler_missing_api_key():

@@ -83,22 +83,24 @@ class GoogleHandler(BaseLLMHandler):
         response = await self.client.aio.models.generate_content_stream(
             model=model, contents=contents, config=config, **kwargs
         )
-        async for chunk in response:
-            content = chunk.candidates[0].content
-            usage = chunk.usage
+        last_chunk = None
 
-            if content:
-                yield content
-
-            if usage and on_usage_complete:
+        try:
+            async for last_chunk in response:
+                if last_chunk.text:
+                    yield last_chunk.text
+        finally:
+            if (
+                last_chunk
+                and getattr(last_chunk, "usage_metadata", None)
+                and on_usage_complete
+            ):
                 usage_data = {
-                    "prompt_tokens": usage.prompt_tokens,
-                    "completion_tokens": usage.completion_tokens,
-                    "total_tokens": usage.total_tokens,
+                    "prompt_tokens": last_chunk.usage_metadata.prompt_token_count,
+                    "completion_tokens": last_chunk.usage_metadata.candidates_token_count,
+                    "total_tokens": last_chunk.usage_metadata.total_token_count,
                 }
                 if inspect.iscoroutinefunction(on_usage_complete):
                     await on_usage_complete(usage_data)
                 else:
                     on_usage_complete(usage_data)
-
-                continue

@@ -25,21 +25,23 @@ class GroqHandler(BaseLLMHandler):
         response = await self.client.chat.completions.create(
             model=model, messages=messages, stream=True, **kwargs
         )
-        async for chunk in response:
-            content = chunk.choices[0].delta.content
-            if content:
-                yield content
 
-            usage = chunk.usage
-            if usage and on_usage_complete:
+        last_chunk = None
+
+        try:
+            async for last_chunk in response:
+                content = last_chunk.choices[0].delta.content
+                if content:
+                    yield content
+        finally:
+
+            if last_chunk and last_chunk.usage and on_usage_complete:
                 usage_data = {
-                    "prompt_tokens": usage.prompt_tokens,
-                    "completion_tokens": usage.completion_tokens,
-                    "total_tokens": usage.total_tokens,
+                    "prompt_tokens": last_chunk.usage.prompt_tokens,
+                    "completion_tokens": last_chunk.usage.completion_tokens,
+                    "total_tokens": last_chunk.usage.total_tokens,
                 }
                 if inspect.iscoroutinefunction(on_usage_complete):
                     await on_usage_complete(usage_data)
                 else:
                     on_usage_complete(usage_data)
-
-                continue

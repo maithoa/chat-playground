@@ -1,5 +1,4 @@
 import asyncio
-from app.services.llm.openai_handler import OpenAIHandler
 from app.services.llm.groq_handler import GroqHandler
 from app.services.llm.openrouter_handler import OpenRouterHandler
 from app.services.llm.google_handler import GoogleHandler
