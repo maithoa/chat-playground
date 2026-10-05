@@ -81,8 +81,23 @@ export const ConversationTokenCounter: React.FC<ConversationTokenCounterProps> =
           {tokenStats.completionTokens.toLocaleString()} out /{" "}
           {tokenStats.totalTokens.toLocaleString()} total)
         </span>
-        {!isStreaming && (
+        {!isStreaming ? (
           <CheckCircle2 className="w-3.5 h-3.5 text-green-500 ml-0.5"></CheckCircle2>
+        ) : (
+          <span className="flex items-center text-blue-500 text-[11px] font-medium ml-1">
+            calculating
+            <span className="flex items-end mb-1 ml-px">
+              <span className="animate-bounce" style={{ animationDelay: "0ms" }}>
+                .
+              </span>
+              <span className="animate-bounce" style={{ animationDelay: "150ms" }}>
+                .
+              </span>
+              <span className="animate-bounce" style={{ animationDelay: "300ms" }}>
+                .
+              </span>
+            </span>
+          </span>
         )}
       </div>
     </div>

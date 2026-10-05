@@ -8,7 +8,7 @@ async function main() {
       provider: "google",
       model: "gemini-3.5-flash",
       messages: [{ role: "user", content: "Xin chào, bạn là ai?" }],
-      outChunk: (chunk) => process.stdout.write(chunk), // In trực tiếp lên terminal theo luồng
+      outChunk: (chunk) => process.stdout.write(chunk),
     });
     console.log("\n\n✅ Stream completed successfully!");
   } catch (error) {

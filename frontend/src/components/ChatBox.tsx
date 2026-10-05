@@ -52,6 +52,14 @@ export function ChatBox() {
             return [...prev.slice(0, -1), updatedLast];
           });
         },
+        onUsageComplete: (usage) => {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (!last || last.role !== "assistant") return prev;
+
+            return [...prev.slice(0, -1), { ...last, usage }];
+          });
+        },
       });
     } catch (error: any) {
       if (error.name === "AbortError") {
@@ -79,60 +87,61 @@ export function ChatBox() {
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-3xl mx-auto p-4">
+    <div className="flex flex-1 flex-col min-h-0 max-w-3xl mx-auto p-4 overflow-hidden">
       {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto border p-4 rounded mb-4 space-y-4 flex flex-col">
+      <div className="flex-1 min-h-0 overflow-y-auto rounded mb-4 space-y-4 space-x-4 flex flex-col">
         {messages.map((msg, index) => (
           <div
             key={index}
             // setting the background color based on the role of the message
-            className={`p-3 rounded-lg max-w-[80%] ${
+            className={`flex flex-col p-4 rounded-lg max-w-[80%] ${
               msg.role === "user"
                 ? "bg-blue-500 text-white self-end"
                 : "bg-gray-100 text-gray-800 self-start"
             }`}
           >
-            <strong className="block text-xs opacity-75 mb-1">{msg.role}</strong>
             <span className="whitespace-pre-wrap">{msg.content}</span>
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
-      <div className="flex gap-2">
-        {/* Token counter*/}
-        <ConversationTokenCounter
-          messages={messages}
-          streamingContent={messages[messages.length - 1]?.content || ""}
-          isStreaming={isGenerating}
-        />
-        {/* Stop button */}
-        {isGenerating && (
-          <button
-            onClick={handleStop}
-            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-          >
-            Stop
-          </button>
-        )}
-      </div>
-      {/* Input & Action Area */}
-      <div className="flex gap-2">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            // ... Enter to Send logic
-          }}
-          placeholder="Type a message..."
-          className="flex-1 border border-gray-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-          rows={2}
-          disabled={isGenerating}
-        />
 
-        <SendMsgToModel
-          disabled={isGenerating || !input.trim()}
-          onSend={(provider, model) => handleSend(provider, model)}
-        />
+      {/* Input & Action Area */}
+      <div className="flex-shrink-0 space-y-2">
+        <div className="flex gap-2">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              // ... Enter to Send logic
+            }}
+            placeholder="Type a message..."
+            className="flex-1 border border-gray-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            rows={2}
+            disabled={isGenerating}
+          />
+          <SendMsgToModel
+            disabled={isGenerating || !input.trim()}
+            onSend={(provider, model) => handleSend(provider, model)}
+          />
+        </div>
+        <div className="space-y-2 mt-2 flex items-center justify-between gap-2">
+          {/* Token counter*/}
+          <ConversationTokenCounter
+            messages={messages}
+            streamingContent={messages[messages.length - 1]?.content || ""}
+            isStreaming={isGenerating}
+          />
+          {/* Stop button */}
+          {isGenerating && (
+            <button
+              onClick={handleStop}
+              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+            >
+              Stop
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
