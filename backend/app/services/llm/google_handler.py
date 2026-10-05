@@ -1,4 +1,5 @@
-from typing import AsyncGenerator, List, Dict, Any
+import inspect
+from typing import AsyncGenerator, List, Dict, Any, Callable
 from google import genai
 from google.genai import types
 
@@ -50,7 +51,11 @@ class GoogleHandler(BaseLLMHandler):
         return contents
 
     async def stream_chat(
-        self, model: str, messages: List[Dict[str, str]], **kwargs: Any
+        self,
+        model: str,
+        messages: List[Dict[str, str]],
+        on_usage_complete: Callable[[Dict[str, Any]], None] | None = None,
+        **kwargs: Any
     ) -> AsyncGenerator[str, None]:
         contents = self._prepare_payload(messages)
 
@@ -78,27 +83,24 @@ class GoogleHandler(BaseLLMHandler):
         response = await self.client.aio.models.generate_content_stream(
             model=model, contents=contents, config=config, **kwargs
         )
-        async for chunk in response:
-            # The Gemini streaming response can present the generated text in
-            # different shapes depending on the client version or the way it
-            # is mocked in tests. Historically the SDK exposed a ``text``
-            # attribute on each chunk. The test suite, however, mocks the
-            # response to provide a ``choices`` list with a ``delta`` object
-            # containing ``content`` – mirroring the OpenAI‑style payload.
-            # To be robust we first try the ``text`` attribute; if it does not
-            # exist we fall back to the ``choices[0].delta.content`` pattern.
-            if hasattr(chunk, "text"):
-                content = getattr(chunk, "text")
-            else:
-                # Defensive access – if the expected attributes are missing we
-                # treat the chunk as having no content.
-                content = (
-                    getattr(chunk, "choices", [None])[
-                        0
-                    ].delta.content  # type: ignore[attr-defined]
-                    if getattr(chunk, "choices", None)
-                    else None
-                )
+        last_chunk = None
 
-            if content:
-                yield content
+        try:
+            async for last_chunk in response:
+                if last_chunk.text:
+                    yield last_chunk.text
+        finally:
+            if (
+                last_chunk
+                and getattr(last_chunk, "usage_metadata", None)
+                and on_usage_complete
+            ):
+                usage_data = {
+                    "prompt_tokens": last_chunk.usage_metadata.prompt_token_count,
+                    "completion_tokens": last_chunk.usage_metadata.candidates_token_count,
+                    "total_tokens": last_chunk.usage_metadata.total_token_count,
+                }
+                if inspect.iscoroutinefunction(on_usage_complete):
+                    await on_usage_complete(usage_data)
+                else:
+                    on_usage_complete(usage_data)
