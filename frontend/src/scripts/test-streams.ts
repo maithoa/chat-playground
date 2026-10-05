@@ -1,4 +1,4 @@
-import  { streamChat } from "../services/llmService"
+import { streamChat } from "../services/llmService";
 
 async function main() {
   console.log("Starting stream test now...\n");
