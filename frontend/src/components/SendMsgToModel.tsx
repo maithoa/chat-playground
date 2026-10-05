@@ -86,7 +86,7 @@ export const SendMsgToModel: React.FC<SendMsgToModelProps> = ({
     <div className="relative inline-flex rounded-md shadow-sm" ref={dropdownRef}>
       {/* Main button to Send */}
       <button
-        type="button"
+        type="submit"
         disabled={disabled}
         onClick={() => onSend(selectedProviderId, selectedModelId)}
         className={`
