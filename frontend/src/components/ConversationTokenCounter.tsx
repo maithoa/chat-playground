@@ -64,8 +64,13 @@ export const ConversationTokenCounter: React.FC<ConversationTokenCounterProps> =
   }, [messages, streamingContent, isStreaming]);
 
   return (
-    <div className="flex items-center gap-2 text-xs font-mono text-gray-600 bg-white/80 border border-gray-200 px-3 py-1.5 rounded-full shadow-sm">
+    <div
+      data-testid="token-counter"
+      className="flex items-center gap-2 text-xs font-mono text-gray-600 bg-white/80 border border-gray-200 px-3 py-1.5 rounded-full shadow-sm"
+    >
       <Cpu
+        data-testid="cpu-icon"
+        aria-label="cpu"
         className={`w-4 h-4 ${
           isStreaming ? "text-blue-600 animate-pulse" : "text-gray-400"
         }`}
