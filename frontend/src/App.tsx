@@ -1,46 +1,22 @@
-import { useState } from 'react'
-import { ModelSelector } from './components/ModelSelector';
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import "./App.css";
+import { ChatBox } from "./components/ChatBox";
 
 function App() {
-  const [selected, setSelected] = useState<{ provider: string; model: string }>({
-    provider: "",
-    model: "",
-  });
-
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <div className="min-h-svh bg-gray-50 flex flex-col">
+      {/* Header contains Model Selector */}
+      <header className="flex-shrink-0 bg-blue-500 border-b p-4">
+        <div className="flex max-w-3xl mx-auto items-center justify-between">
+          <h1 className="text-xl font-bold text-white">LLM Chat Playground</h1>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <ModelSelector
-          onSelect={(providerId, modelId) => {
-            setSelected({ provider: providerId, model: modelId });
-          }}
-        />
-      </section>
+      </header>
 
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-
-      <div style={{ marginTop: "16px", fontSize: "13px", color: "#555" }}>
-        Selecting: <strong>{selected.provider}</strong> / <strong>{selected.model}</strong>
-      </div>
-    </>
-  )
+      {/* Main Chat Interface */}
+      <main className="flex flex-1 min-h-0 max-w-3xl w-full mx-auto p-4 ">
+        <ChatBox />
+      </main>
+    </div>
+  );
 }
 
-export default App
+export default App;

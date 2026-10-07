@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, AsyncGenerator
+from typing import Callable, Dict, Any, List, AsyncGenerator, Optional
 from app.core.config import settings
 from .base import BaseLLMHandler
 from .openrouter_handler import OpenRouterHandler
@@ -33,8 +33,19 @@ class LLMService:
         ]
 
     @classmethod
+    def on_usage_complete(cls, usage_data: Dict[str, Any]):
+        # This method can be used to handle usage data, e.g., logging or storing it.
+        # For now, we just print it. In a real application, you might want to store it in a database.
+        print("Usage data:", usage_data)
+
+    @classmethod
     async def stream_chat(
-        cls, provider: str, model: str, messages: List[Dict[str, Any]], **kwargs
+        cls,
+        provider: str,
+        model: str,
+        messages: List[Dict[str, Any]],
+        on_usage_complete: Optional[Callable[[Dict[str, Any]], None]] = None,
+        **kwargs,
     ) -> AsyncGenerator[str, None]:
 
         cls._ensure_init_handlers()
@@ -47,6 +58,9 @@ class LLMService:
         # that returns an async generator, so no special await handling is
         # required.
         async for chunk in handler.stream_chat(
-            model=model, messages=messages, **kwargs
+            model=model,
+            messages=messages,
+            on_usage_complete=on_usage_complete or cls.on_usage_complete,
+            **kwargs,
         ):
             yield chunk

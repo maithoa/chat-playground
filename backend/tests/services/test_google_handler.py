@@ -1,26 +1,144 @@
-"""Tests for the Google (Gemini) LLM handler.
-
-The handler lives in ``backend/app/services/llm/google_handler.py`` and is
-named ``GoogleHandler.  The tests verify two
-behaviours:
-
-1. Initialisation fails with a clear ``ValueError`` when the Google API key
-   is missing.
-2. ``stream_chat`` correctly streams content from the underlying ``genai``
-   client.  The real client is replaced with a lightweight mock that yields
-   ``choices[0].delta.content`` values.
-
-The test suite uses ``pytest`` with the ``anyio`` marker to run the async
-functions without requiring the ``pytest‑asyncio`` plugin.
-"""
-
-from __future__ import annotations
-
 import pytest
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-
 from app.core.config import settings
 from app.services.llm.google_handler import GoogleHandler
+
+
+class MockUsageMetadata:
+    """Mock structure matching Google GenAI SDK's usage_metadata."""
+
+    def __init__(self, prompt_tokens: int, completion_tokens: int, total_tokens: int):
+        self.prompt_token_count = prompt_tokens
+        self.candidates_token_count = completion_tokens
+        self.total_token_count = total_tokens
+
+
+class MockChunk:
+    """A lightweight mock mimicking the Gemini streaming chunk.
+
+    The :class:`GoogleHandler` expects each chunk to have a ``candidates``
+    sequence where the first element provides a ``content`` attribute, and an
+    optional ``usage`` attribute containing ``prompt_tokens``,
+    ``completion_tokens`` and ``total_tokens``.  The test supplies simple
+    values for these fields.
+    """
+
+    def __init__(
+        self, content: str | None, usage_metadata: MockUsageMetadata | None = None
+    ):
+        # ``candidates[0].content`` is what the handler yields.
+        self.text = content
+        self.usage_metadata = usage_metadata
+
+
+def _mock_client(chunks):
+    """Create an ``AsyncMock`` client that yields *chunks*.
+
+    The handler calls ``self.client.aio.models.generate_content_stream`` and
+    iterates over the async generator it returns.  This helper builds a client
+    where that method returns an async generator yielding the supplied mock
+    chunks.
+    """
+
+    async def mock_stream():
+        for c in chunks:
+            yield c
+
+    client = AsyncMock()
+    client.aio.models.generate_content_stream = AsyncMock(return_value=mock_stream())
+    return client
+
+
+@pytest.mark.asyncio
+async def test_google_handler_stream_chat_success():
+    """Verify that ``GoogleHandler.stream_chat`` yields the expected content.
+
+    The test injects a mock ``genai.Client`` that returns a small series of
+    chunks.  No usage callback is provided – the handler should simply yield the
+    ``content`` values.
+    """
+
+    chunks = [MockChunk("Hello"), MockChunk(","), MockChunk("world"), MockChunk(None)]
+    mock_client = _mock_client(chunks)
+
+    with patch(
+        "app.services.llm.google_handler.genai.Client", return_value=mock_client
+    ):
+        handler = GoogleHandler(api_key="dummy-key")
+        result = []
+        async for chunk in handler.stream_chat(
+            model="gemini-1.5-flash", messages=[{"role": "user", "content": "hi"}]
+        ):
+            result.append(chunk)
+
+    assert result == ["Hello", ",", "world"]
+
+
+@pytest.mark.asyncio
+async def test_google_handler_stream_chat_with_async_usage_callback():
+    """Ensure an async ``on_usage_complete`` receives the correct usage data."""
+
+    usage = MockUsageMetadata(prompt_tokens=5, completion_tokens=10, total_tokens=15)
+    chunks = [
+        MockChunk("Hello"),
+        MockChunk("world", usage),
+        MockChunk(None, usage_metadata=usage),
+    ]
+    mock_client = _mock_client(chunks)
+
+    async_usage_data = []
+
+    async def async_callback(data):
+        async_usage_data.append(data)
+
+    with patch(
+        "app.services.llm.google_handler.genai.Client", return_value=mock_client
+    ):
+        handler = GoogleHandler(api_key="dummy-key")
+        result = []
+        async for chunk in handler.stream_chat(
+            model="gemini-1.5-flash",
+            messages=[{"role": "user", "content": "hi"}],
+            on_usage_complete=async_callback,
+        ):
+            result.append(chunk)
+
+    assert result == ["Hello", "world"]
+    assert async_usage_data == [
+        {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_google_handler_stream_chat_with_sync_usage_callback():
+    """Verify that a regular (sync) usage callback is also supported."""
+
+    usage = MockUsageMetadata(prompt_tokens=2, completion_tokens=3, total_tokens=5)
+    chunks = [MockChunk("Test", usage), MockChunk(None, usage_metadata=usage)]
+    mock_client = _mock_client(chunks)
+
+    sync_usage_data = []
+
+    def sync_callback(data):
+        sync_usage_data.append(data)
+
+    with patch(
+        "app.services.llm.google_handler.genai.Client", return_value=mock_client
+    ):
+        handler = GoogleHandler(api_key="dummy-key")
+        result = []
+        async for chunk in handler.stream_chat(
+            model="gemini-1.5-flash",
+            messages=[{"role": "user", "content": "hi"}],
+            on_usage_complete=sync_callback,
+        ):
+            result.append(chunk)
+
+    assert result == ["Test"]
+    assert sync_usage_data == [
+        {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5}
+    ]
 
 
 def test_google_handler_missing_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -33,55 +151,3 @@ def test_google_handler_missing_api_key(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(settings, "GOOGLE_API_KEY", None, raising=False)
     with pytest.raises(ValueError, match="Could not find Google API key."):
         GoogleHandler()
-
-
-@pytest.mark.anyio
-async def test_google_handler_stream_chat(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Validate that ``stream_chat`` yields the expected content chunks.
-
-    A fake ``genai.Client`` is injected that returns an async generator
-    mimicking the shape of the real Gemini streaming response.  Each yielded
-    object contains ``choices[0].delta.content`` which the handler extracts.
-    """
-
-    # Prepare a dummy API key so the constructor succeeds.
-    monkeypatch.setattr(settings, "GOOGLE_API_KEY", "dummy-key", raising=False)
-
-    # ----- Helper classes to mimic the streaming response -----
-    class _Delta:
-        def __init__(self, content: str | None):
-            self.content = content
-
-    class _Choice:
-        def __init__(self, content: str | None):
-            self.delta = _Delta(content)
-
-    class _Chunk:
-        def __init__(self, content: str | None):
-            self.choices = [_Choice(content)]
-
-    async def _fake_stream(*_, **__) -> AsyncMock:
-        """Async generator yielding two chunks of text.
-
-        The real ``genai`` client returns an async iterator; here we simply
-        ``yield`` two ``_Chunk`` instances.
-        """
-        yield _Chunk("Hello ")
-        yield _Chunk("World!")
-
-    # Mock the ``genai.Client`` to return an object with the required async
-    # attribute hierarchy ``client.aio.models.generate_content_stream``.
-    mock_client = MagicMock()
-    mock_client.aio.models.generate_content_stream = AsyncMock(side_effect=_fake_stream)
-
-    with patch("google.genai.Client", return_value=mock_client):
-        handler = GoogleHandler()
-        # The payload preparation is not the focus; we can pass a simple list.
-        async_gen = handler.stream_chat(
-            model="gemini-1.5-flash", messages=[{"role": "user", "content": "hi"}]
-        )
-        collected = []
-        async for chunk in async_gen:
-            collected.append(chunk)
-
-    assert "".join(collected) == "Hello World!"
