@@ -71,8 +71,8 @@ class OpenRouterHandler(BaseLLMHandler):
                     "prompt_tokens": last_chunk.usage.prompt_tokens,
                     "completion_tokens": last_chunk.usage.completion_tokens,
                     "total_tokens": last_chunk.usage.total_tokens,
-                    "time_to_first_token": time_to_first_token,
-                    "tokens_per_second": tokens_per_second,
+                    "time_to_first_token_ms": round(time_to_first_token * 1000, 2),
+                    "tokens_per_second": round(tokens_per_second, 2),
                 }
                 if inspect.iscoroutinefunction(on_usage_complete):
                     await on_usage_complete(usage_data)
