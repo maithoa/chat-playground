@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 from app.core.config import settings
 from app.services.llm.groq_handler import GroqHandler
 
@@ -40,7 +40,14 @@ async def test_groq_handler_stream_chat_with_async_usage_callback():
     """Validate async ``on_usage_complete`` receives correct usage data."""
 
     usage = type(
-        "usage", (), {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
+        "usage",
+        (),
+        {
+            "prompt_tokens": 5,
+            "completion_tokens": 10,
+            "total_tokens": 15,
+            "total_time": 0.1,
+        },
     )()
     chunks = [MockChunk("Hello"), MockChunk("world"), MockChunk(None, usage)]
     mock_client = _mock_client(chunks)
@@ -62,7 +69,13 @@ async def test_groq_handler_stream_chat_with_async_usage_callback():
 
     assert result == ["Hello", "world"]
     assert async_usage_data == [
-        {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
+        {
+            "prompt_tokens": 5,
+            "completion_tokens": 10,
+            "total_tokens": 15,
+            "time_to_first_token_ms": ANY,
+            "tokens_per_second": 150,
+        }
     ]
 
 
@@ -71,7 +84,14 @@ async def test_groq_handler_stream_chat_with_sync_usage_callback():
     """Validate sync ``on_usage_complete`` works as expected."""
 
     usage = type(
-        "Usage", (), {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5}
+        "Usage",
+        (),
+        {
+            "prompt_tokens": 2,
+            "completion_tokens": 3,
+            "total_tokens": 5,
+            "total_time": 0.1,
+        },
     )()
     chunks = [MockChunk("Test"), MockChunk(None, usage)]
     mock_client = _mock_client(chunks)
@@ -93,7 +113,13 @@ async def test_groq_handler_stream_chat_with_sync_usage_callback():
 
     assert result == ["Test"]
     assert sync_usage_data == [
-        {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5}
+        {
+            "prompt_tokens": 2,
+            "completion_tokens": 3,
+            "total_tokens": 5,
+            "time_to_first_token_ms": ANY,
+            "tokens_per_second": 50,
+        }
     ]
 
 

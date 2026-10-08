@@ -7,23 +7,16 @@
 ## 1. Execution Scope & File Boundaries
 ### FRONTEND
 - **Allowed Scope  (Can CREATE and MODIFY only within these paths):**
-  - `src/features/arena/**` (Components, Hooks, Reducers, Services)
-  - `src/types/arena.ts` (Type contracts)
-  - `tests/unit/arena/**` (Unit & Integration tests)
+  - `frontend/src/features/arena/**` (Components, Hooks, Reducers, Services)
+  - `frontend/src/types/arena.ts` (Type contracts)
+  - `frontend/tests/unit/arena/**` (Unit & Integration tests)
 
 - **Forbidden Scope (STRICTLY READ-ONLY or DO NOT TOUCH):**
+  - `backend/**`
   - `src/core/auth/**`
   - `src/components/**`
   - Root project configurations (`package.json`, `tsconfig.json`, `vite.config.ts`, `tailwind.config.js`)
 
-### BACKEND
-- **Allowed Scope  (Can CREATE and MODIFY only within these paths):**
-  - `app/services/llm/**` (Clould Provider Handlers and LLM Service)
-
-- **Forbidden Scope (STRICTLY READ-ONLY or DO NOT TOUCH):**
-  - `src/core/**`
-  - `src/models/**`
-  - Root project configurations (`pyproject.toml`)
 ---
 
 ## 2. Strict Type Contracts (`src/types/arena.ts`)

@@ -1,4 +1,5 @@
 import inspect
+import time
 from typing import AsyncGenerator, List, Dict, Any, Callable, Optional
 from groq import AsyncGroq
 
@@ -19,28 +20,46 @@ class GroqHandler(BaseLLMHandler):
         model: str,
         messages: List[Dict[str, str]],
         on_usage_complete: Optional[Callable[[Dict[str, Any]], None]] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> AsyncGenerator[str, None]:
 
+        start_time = time.perf_counter()
         response = await self.client.chat.completions.create(
             model=model, messages=messages, stream=True, **kwargs
         )
 
         last_chunk = None
-
+        first_chunk = True
         try:
             async for last_chunk in response:
                 content = last_chunk.choices[0].delta.content
                 if content:
+                    if first_chunk:
+                        first_chunk = False
+                        time_to_first_chunk = time.perf_counter() - start_time
+                        print(f"Time to first chunk: {time_to_first_chunk} seconds")
+
                     yield content
         finally:
+            end_time = time.perf_counter()
+            if start_time:
+                print(f"\nTime taken: {end_time - start_time} seconds")
 
             if last_chunk and last_chunk.usage and on_usage_complete:
+                tokens_per_second = (
+                    (last_chunk.usage.total_tokens / last_chunk.usage.total_time)
+                    if last_chunk.usage.total_time > 0
+                    else 0
+                )
                 usage_data = {
                     "prompt_tokens": last_chunk.usage.prompt_tokens,
                     "completion_tokens": last_chunk.usage.completion_tokens,
                     "total_tokens": last_chunk.usage.total_tokens,
+                    "time_to_first_token_ms": time_to_first_chunk,
+                    "tokens_per_second": tokens_per_second,
                 }
+                print(f"\nCalulated Total time taken: {end_time - start_time} seconds")
+                print(f"\nTotal time from API: {last_chunk.usage.total_time} seconds")
                 if inspect.iscoroutinefunction(on_usage_complete):
                     await on_usage_complete(usage_data)
                 else:
