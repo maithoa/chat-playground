@@ -1,5 +1,5 @@
 import "./App.css";
-import { ChatBox } from "./components/ChatBox";
+import { ChatBox } from "./features/chatbox/ChatBox";
 
 function App() {
   return (

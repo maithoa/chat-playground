@@ -1,8 +1,8 @@
 import React, { useMemo } from "react";
 import { Cpu, CheckCircle2 } from "lucide-react";
-import type { Message } from "../types/chat";
+import type { Message } from "@/types/chat";
 
-interface ConversationTokenCounterProps {
+export interface ConversationTokenCounterProps {
   messages: Message[];
   /**Current text being streamed from backend */
   streamingContent?: string;

@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { SendMsgToModel } from "./SendMsgToModel";
-import type { ProviderInfo } from "../types/llm";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { SendMsgToModel } from "@/components/Button/SendMsgToModel/SendMsgToModel";
+import type { ProviderInfo } from "@/types/llm";
 
 // Mock providers data for the primary suite (basic fetch & selection)
 const mockProviders: ProviderInfo[] = [
@@ -10,8 +10,8 @@ const mockProviders: ProviderInfo[] = [
     name: "OpenAI",
     is_active: true,
     models: [
-      { id: "gpt-4o", name: "GPT-4o" },
-      { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
+      { id: "gpt-4o", name: "GPT-4o", provider_id: "openai" },
+      { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo", provider_id: "openai" },
     ],
   },
 ];
@@ -23,15 +23,15 @@ const mockProviders2: ProviderInfo[] = [
     name: "Provider One",
     is_active: true,
     models: [
-      { id: "model-a", name: "Model A" },
-      { id: "model-b", name: "Model B" },
+      { id: "model-a", name: "Model A", provider_id: "prov-1" },
+      { id: "model-b", name: "Model B", provider_id: "prov-1" },
     ],
   },
   {
     id: "prov-2",
     name: "Provider Two",
     is_active: true,
-    models: [{ id: "model-x", name: "Model X" }],
+    models: [{ id: "model-x", name: "Model X", provider_id: "prov-2" }],
   },
 ];
 

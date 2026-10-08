@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import { ConversationTokenCounter } from "./ConversationTokenCounter";
-import type { Message } from "../types/chat";
+import { ConversationTokenCounter } from "@/components/Button/ConversationTokenCounter/ConversationTokenCounter";
+import type { Message } from "@/types/chat";
 
 // Helper to create a message with optional usage data
 const createMessage = (content: string, role: string, usage?: any): Message => {
@@ -49,7 +49,7 @@ describe("ConversationTokenCounter Component", () => {
     // The animated calculating text should be present
     expect(screen.getByText(/calculating/i)).toBeInTheDocument();
     // The CPU icon should have the pulse class (blue color) – check class list contains animate-pulse
-    const cpuIcon = screen.getByTestId("cpu-icon");
+    // const cpuIcon = screen.getByTestId("cpu-icon");
     // Since the component does not set testId, we fallback to checking the SVG via role
     // Find the svg element with title containing "Cpu" (lucide icons render with aria-label)
     const svg = screen.getByLabelText(/cpu/i);

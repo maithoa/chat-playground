@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import type { ProviderInfo } from "../types/llm";
-import { env } from "../config/env";
+import type { ProviderInfo } from "@/types/llm";
+import { env } from "@/config/env";
 
-interface ModelSelectorProps {
+export interface ModelSelectorProps {
   onSelect: (providerId: string, modelId: string) => void;
   disabled?: boolean;
 }

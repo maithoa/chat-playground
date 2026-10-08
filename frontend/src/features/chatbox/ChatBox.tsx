@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from "react";
-import { streamChat } from "../services/llmService";
-import type { Message } from "../types/chat";
-import { SendMsgToModel } from "./SendMsgToModel";
-import { ConversationTokenCounter } from "./ConversationTokenCounter";
+import { streamChat } from "@/services/llmService";
+import type { Message } from "@/types/chat";
+import { SendMsgToModel } from "@/components/Button/SendMsgToModel/SendMsgToModel";
+import { ConversationTokenCounter } from "@/components/Button/ConversationTokenCounter";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Coffee } from "lucide-react";
 
 export function ChatBox() {
-  const [temperature, setTemperature] = useState(0.7);
+  const [temperature] = useState(0.7);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);

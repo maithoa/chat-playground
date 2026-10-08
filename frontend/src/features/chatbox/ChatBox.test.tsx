@@ -1,11 +1,11 @@
 // ChatBox component unit tests
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import * as llmService from "../services/llmService";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import * as llmService from "@/services/llmService";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ChatBox } from "./ChatBox";
+import { ChatBox } from "@/features/chatbox/ChatBox";
 
 // Mock streamChat to simulate streaming chunks and usage data
-vi.mock("../services/llmService", () => ({
+vi.mock("../../services/llmService", () => ({
   streamChat: vi.fn().mockImplementation(async ({ outChunk, onUsageComplete }) => {
     // Simulate streaming two chunks
     outChunk("Hello ");
@@ -118,7 +118,7 @@ describe("ChatBox component", () => {
     // Ensure the generic mock for streamChat is present
     const abortSpy = vi.fn();
     // Mock implementation that never resolves and registers abort listener
-    llmService.streamChat.mockImplementation(({ signal }) => {
+    vi.spyOn(llmService, "streamChat").mockImplementation(({ signal }) => {
       signal?.addEventListener("abort", abortSpy);
       return new Promise(() => {});
     });
@@ -150,7 +150,7 @@ describe("ChatBox component", () => {
     (globalThis as any).alert = vi.fn();
     const alertMock = (globalThis as any).alert as ReturnType<typeof vi.fn>;
     // Override the previously mocked streamChat to throw an error for this test
-    llmService.streamChat.mockImplementation(() => {
+    vi.spyOn(llmService, "streamChat").mockImplementation(() => {
       throw new Error("Network failure");
     });
 
