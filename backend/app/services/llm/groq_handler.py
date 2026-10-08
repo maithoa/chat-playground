@@ -51,17 +51,28 @@ class GroqHandler(BaseLLMHandler):
                 logger.info(f"\nTime taken: {duration_seconds} seconds")
 
             if last_chunk and last_chunk.usage and on_usage_complete:
+                logger.info(f"\nUsage Info object from Groq {last_chunk.usage}")
+                completion_time_api = 0
+
+                if (
+                    last_chunk.usage.completion_time
+                    and last_chunk.usage.completion_time > 0
+                ):
+                    completion_time_api = last_chunk.usage.completion_time
+                elif last_chunk.usage.total_time and last_chunk.usage.total_time > 0:
+                    completion_time_api = last_chunk.usage.total_time
+
                 tokens_per_second = (
-                    (last_chunk.usage.total_tokens / last_chunk.usage.total_time)
-                    if last_chunk.usage.total_time > 0
+                    (last_chunk.usage.completion_tokens / completion_time_api)
+                    if completion_time_api and completion_time_api > 0
                     else 0
                 )
                 usage_data = {
                     "prompt_tokens": last_chunk.usage.prompt_tokens,
                     "completion_tokens": last_chunk.usage.completion_tokens,
                     "total_tokens": last_chunk.usage.total_tokens,
-                    "time_to_first_token_ms": time_to_first_chunk,
-                    "tokens_per_second": tokens_per_second,
+                    "time_to_first_token_ms": round(time_to_first_chunk * 1000, 2),
+                    "tokens_per_second": round(tokens_per_second, 2),
                 }
 
                 logger.info(f"\nCalulated Total time taken: {duration_seconds} seconds")

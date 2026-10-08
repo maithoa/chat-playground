@@ -18,6 +18,11 @@ class MockChunk:
         self.usage = usage
 
 
+class GreaterThanZero:
+    def __eq__(self, other):
+        return isinstance(other, (int, float)) and other > 0
+
+
 def _mock_client(chunks):
     """Create an ``AsyncMock`` client that yields the provided *chunks*.
 
@@ -46,6 +51,7 @@ async def test_groq_handler_stream_chat_with_async_usage_callback():
             "prompt_tokens": 5,
             "completion_tokens": 10,
             "total_tokens": 15,
+            "completion_time": 0.1,
             "total_time": 0.1,
         },
     )()
@@ -74,7 +80,7 @@ async def test_groq_handler_stream_chat_with_async_usage_callback():
             "completion_tokens": 10,
             "total_tokens": 15,
             "time_to_first_token_ms": ANY,
-            "tokens_per_second": 150,
+            "tokens_per_second": 100,
         }
     ]
 
@@ -89,6 +95,7 @@ async def test_groq_handler_stream_chat_with_sync_usage_callback():
         {
             "prompt_tokens": 2,
             "completion_tokens": 3,
+            "completion_time": 0.08,
             "total_tokens": 5,
             "total_time": 0.1,
         },
@@ -117,8 +124,8 @@ async def test_groq_handler_stream_chat_with_sync_usage_callback():
             "prompt_tokens": 2,
             "completion_tokens": 3,
             "total_tokens": 5,
-            "time_to_first_token_ms": ANY,
-            "tokens_per_second": 50,
+            "time_to_first_token_ms": GreaterThanZero(),
+            "tokens_per_second": 37.5,
         }
     ]
 
