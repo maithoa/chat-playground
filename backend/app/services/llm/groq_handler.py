@@ -1,5 +1,6 @@
 import inspect
 import time
+from loguru import logger
 from typing import AsyncGenerator, List, Dict, Any, Callable, Optional
 from groq import AsyncGroq
 
@@ -37,13 +38,17 @@ class GroqHandler(BaseLLMHandler):
                     if first_chunk:
                         first_chunk = False
                         time_to_first_chunk = time.perf_counter() - start_time
-                        print(f"Time to first chunk: {time_to_first_chunk} seconds")
+                        logger.info(
+                            f"Time to first chunk: {time_to_first_chunk} seconds"
+                        )
 
                     yield content
         finally:
             end_time = time.perf_counter()
+            duration_seconds = end_time - start_time
+
             if start_time:
-                print(f"\nTime taken: {end_time - start_time} seconds")
+                logger.info(f"\nTime taken: {duration_seconds} seconds")
 
             if last_chunk and last_chunk.usage and on_usage_complete:
                 tokens_per_second = (
@@ -58,8 +63,11 @@ class GroqHandler(BaseLLMHandler):
                     "time_to_first_token_ms": time_to_first_chunk,
                     "tokens_per_second": tokens_per_second,
                 }
-                print(f"\nCalulated Total time taken: {end_time - start_time} seconds")
-                print(f"\nTotal time from API: {last_chunk.usage.total_time} seconds")
+
+                logger.info(f"\nCalulated Total time taken: {duration_seconds} seconds")
+                logger.info(
+                    f"\nTotal time from API: {last_chunk.usage.total_time} seconds"
+                )
                 if inspect.iscoroutinefunction(on_usage_complete):
                     await on_usage_complete(usage_data)
                 else:
