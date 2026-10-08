@@ -32,6 +32,11 @@ class MockChunk:
         self.usage_metadata = usage_metadata
 
 
+class GreaterThanZero:
+    def __eq__(self, other):
+        return isinstance(other, (int, float)) and other > 0
+
+
 def _mock_client(chunks):
     """Create an ``AsyncMock`` client that yields *chunks*.
 
@@ -106,7 +111,13 @@ async def test_google_handler_stream_chat_with_async_usage_callback():
 
     assert result == ["Hello", "world"]
     assert async_usage_data == [
-        {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
+        {
+            "prompt_tokens": 5,
+            "completion_tokens": 10,
+            "total_tokens": 15,
+            "time_to_first_token_ms": GreaterThanZero(),
+            "tokens_per_second": GreaterThanZero(),
+        }
     ]
 
 
@@ -137,7 +148,13 @@ async def test_google_handler_stream_chat_with_sync_usage_callback():
 
     assert result == ["Test"]
     assert sync_usage_data == [
-        {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5}
+        {
+            "prompt_tokens": 2,
+            "completion_tokens": 3,
+            "total_tokens": 5,
+            "time_to_first_token_ms": GreaterThanZero(),
+            "tokens_per_second": GreaterThanZero(),
+        }
     ]
 
 

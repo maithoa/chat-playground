@@ -1,4 +1,6 @@
 import inspect
+import time
+from loguru import logger
 from typing import AsyncGenerator, List, Dict, Any, Callable
 from google import genai
 from google.genai import types
@@ -55,7 +57,7 @@ class GoogleHandler(BaseLLMHandler):
         model: str,
         messages: List[Dict[str, str]],
         on_usage_complete: Callable[[Dict[str, Any]], None] | None = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> AsyncGenerator[str, None]:
         contents = self._prepare_payload(messages)
 
@@ -80,14 +82,23 @@ class GoogleHandler(BaseLLMHandler):
             disable=True
         )
 
+        start_time = time.perf_counter()
+        time_to_first_chunk = 0
+
         response = await self.client.aio.models.generate_content_stream(
             model=model, contents=contents, config=config, **kwargs
         )
         last_chunk = None
-
+        first_chunk = True
         try:
             async for last_chunk in response:
                 if last_chunk.text:
+                    if first_chunk:
+                        first_chunk = False
+                        time_to_first_chunk = time.perf_counter() - start_time
+                        logger.info(
+                            f"Time to first chunk: {time_to_first_chunk} seconds"
+                        )
                     yield last_chunk.text
         finally:
             if (
@@ -95,10 +106,24 @@ class GoogleHandler(BaseLLMHandler):
                 and getattr(last_chunk, "usage_metadata", None)
                 and on_usage_complete
             ):
+                end_time = time.perf_counter()
+                duration_seconds = (
+                    (end_time - start_time) if (end_time - start_time) > 0 else 0
+                )
+                completion_tokens = (
+                    last_chunk.usage_metadata.candidates_token_count or 0
+                )
+                tokens_per_second = (
+                    (completion_tokens / duration_seconds)
+                    if duration_seconds > 0
+                    else 0
+                )
                 usage_data = {
                     "prompt_tokens": last_chunk.usage_metadata.prompt_token_count,
                     "completion_tokens": last_chunk.usage_metadata.candidates_token_count,
                     "total_tokens": last_chunk.usage_metadata.total_token_count,
+                    "time_to_first_token_ms": round(time_to_first_chunk * 1000, 2),
+                    "tokens_per_second": round(tokens_per_second, 2),
                 }
                 if inspect.iscoroutinefunction(on_usage_complete):
                     await on_usage_complete(usage_data)
