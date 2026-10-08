@@ -3,6 +3,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.core.config import settings
 from app.services.llm.google_handler import GoogleHandler
+from tests.utils import IS_POSITIVE
 
 
 class MockUsageMetadata:
@@ -30,11 +31,6 @@ class MockChunk:
         # ``candidates[0].content`` is what the handler yields.
         self.text = content
         self.usage_metadata = usage_metadata
-
-
-class GreaterThanZero:
-    def __eq__(self, other):
-        return isinstance(other, (int, float)) and other > 0
 
 
 def _mock_client(chunks):
@@ -115,8 +111,8 @@ async def test_google_handler_stream_chat_with_async_usage_callback():
             "prompt_tokens": 5,
             "completion_tokens": 10,
             "total_tokens": 15,
-            "time_to_first_token_ms": GreaterThanZero(),
-            "tokens_per_second": GreaterThanZero(),
+            "time_to_first_token_ms": IS_POSITIVE,
+            "tokens_per_second": IS_POSITIVE,
         }
     ]
 
@@ -152,8 +148,8 @@ async def test_google_handler_stream_chat_with_sync_usage_callback():
             "prompt_tokens": 2,
             "completion_tokens": 3,
             "total_tokens": 5,
-            "time_to_first_token_ms": GreaterThanZero(),
-            "tokens_per_second": GreaterThanZero(),
+            "time_to_first_token_ms": IS_POSITIVE,
+            "tokens_per_second": IS_POSITIVE,
         }
     ]
 

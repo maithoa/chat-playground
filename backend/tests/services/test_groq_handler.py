@@ -1,8 +1,9 @@
 import pytest
 import asyncio
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from app.core.config import settings
 from app.services.llm.groq_handler import GroqHandler
+from tests.utils import IS_POSITIVE
 
 
 class MockChunk:
@@ -16,11 +17,6 @@ class MockChunk:
     def __init__(self, content: str | None, usage: object | None = None):
         self.choices = [MagicMock(delta=MagicMock(content=content))]
         self.usage = usage
-
-
-class GreaterThanZero:
-    def __eq__(self, other):
-        return isinstance(other, (int, float)) and other > 0
 
 
 def _mock_client(chunks):
@@ -79,7 +75,7 @@ async def test_groq_handler_stream_chat_with_async_usage_callback():
             "prompt_tokens": 5,
             "completion_tokens": 10,
             "total_tokens": 15,
-            "time_to_first_token_ms": ANY,
+            "time_to_first_token_ms": IS_POSITIVE,
             "tokens_per_second": 100,
         }
     ]
@@ -124,7 +120,7 @@ async def test_groq_handler_stream_chat_with_sync_usage_callback():
             "prompt_tokens": 2,
             "completion_tokens": 3,
             "total_tokens": 5,
-            "time_to_first_token_ms": GreaterThanZero(),
+            "time_to_first_token_ms": IS_POSITIVE,
             "tokens_per_second": 37.5,
         }
     ]

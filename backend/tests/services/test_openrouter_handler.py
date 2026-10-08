@@ -1,8 +1,9 @@
 import pytest
 import asyncio
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.llm.openrouter_handler import OpenRouterHandler
 from openai.types.completion_usage import CompletionUsage
+from tests.utils import IS_POSITIVE
 
 
 # Helper class to mock a chunk returned from the OpenRouter API, optionally with usage data
@@ -73,8 +74,8 @@ async def test_openrouter_handler_stream_chat_with_async_usage_callback():
             "prompt_tokens": 5,
             "completion_tokens": 10,
             "total_tokens": 15,
-            "time_to_first_token_ms": ANY,
-            "tokens_per_second": ANY,
+            "time_to_first_token_ms": IS_POSITIVE,
+            "tokens_per_second": IS_POSITIVE,
         }
     ]
 
@@ -116,8 +117,8 @@ async def test_openrouter_handler_stream_chat_with_sync_usage_callback():
             "prompt_tokens": 2,
             "completion_tokens": 3,
             "total_tokens": 5,
-            "time_to_first_token_ms": ANY,
-            "tokens_per_second": ANY,
+            "time_to_first_token_ms": IS_POSITIVE,
+            "tokens_per_second": IS_POSITIVE,
         }
     ]
 
