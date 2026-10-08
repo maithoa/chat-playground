@@ -1,4 +1,5 @@
 import json
+import inspect
 from typing import List
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -57,21 +58,17 @@ async def chat_stream(request: ChatRequest):
     # Stream generator
     async def event_generator():
         try:
-            # ``LLMService.stream_chat`` is expected to be an async generator.
-            # In tests it is patched with an ``AsyncMock`` whose ``side_effect``
-            # returns an async generator function. The mock call therefore
-            # returns a coroutine that must be awaited to obtain the async
-            # iterable. To support both the real implementation and the mocked
-            # version we resolve the result first.
             stream = LLMService.stream_chat(
                 provider=provider_info.id,
                 model=model_info.id,
                 messages=request.messages,
                 temperature=request.temperature,
             )
-            async for chunk in stream:
-                payload = json.dumps({"content": chunk}, ensure_ascii=False)
-                yield f"data: {payload}\n\n"
+            if inspect.iscoroutine(stream):
+                stream = await stream
+
+            async for streamEvent in stream:
+                yield streamEvent.to_sse_data()
 
         except Exception as e:
             error_payload = json.dumps({"error": str(e)}, ensure_ascii=False)

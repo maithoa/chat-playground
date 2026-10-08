@@ -33,9 +33,8 @@ async def main():
         async for chunk in handler.stream_chat(
             model=model,
             messages=messages,
-            on_usage_complete=handle_usage,
         ):
-            print(chunk, end="", flush=True)
+            print(chunk.data, end="", flush=True)
         print("\n---Streaming ends---")
     except Exception as ex:
         print(f"\nError: {ex}")

@@ -6,6 +6,7 @@ from groq import AsyncGroq
 
 from app.core.config import settings
 from .base import BaseLLMHandler
+from app.schemas.llm import StreamEvent, StreamEventType
 
 
 class GroqHandler(BaseLLMHandler):
@@ -20,9 +21,8 @@ class GroqHandler(BaseLLMHandler):
         self,
         model: str,
         messages: List[Dict[str, str]],
-        on_usage_complete: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs: Any,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[StreamEvent, None]:
 
         start_time = time.perf_counter()
         response = await self.client.chat.completions.create(
@@ -42,14 +42,19 @@ class GroqHandler(BaseLLMHandler):
                             f"Time to first chunk: {time_to_first_chunk} seconds"
                         )
 
-                    yield content
+                    yield StreamEvent(type=StreamEventType.CONTENT, data=content)
+
+        except Exception as ex:
+            logger.error(f"{ex}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=ex)
+
         finally:
             duration_seconds = time.perf_counter() - start_time
 
             if start_time:
                 logger.info(f"\nTime taken: {duration_seconds} seconds")
 
-            if last_chunk and last_chunk.usage and on_usage_complete:
+            if last_chunk and last_chunk.usage:
                 logger.info(f"\nUsage Info object from Groq {last_chunk.usage}")
                 completion_time_api = 0
 
@@ -74,11 +79,7 @@ class GroqHandler(BaseLLMHandler):
                     "tokens_per_second": round(tokens_per_second, 2),
                 }
 
-                logger.info(f"\nCalulated Total time taken: {duration_seconds} seconds")
-                logger.info(
-                    f"\nTotal time from API: {last_chunk.usage.total_time} seconds"
-                )
-                if inspect.iscoroutinefunction(on_usage_complete):
-                    await on_usage_complete(usage_data)
-                else:
-                    on_usage_complete(usage_data)
+                se = StreamEvent(type=StreamEventType.USAGE, data=usage_data)
+                logger.info(f"\n Usage data in Handler: {se.data} ")
+
+                yield se

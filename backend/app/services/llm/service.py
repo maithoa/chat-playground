@@ -6,6 +6,8 @@ from .groq_handler import GroqHandler
 from .google_handler import GoogleHandler
 from .catalog import PROVIDERS_CATALOG
 from app.schemas.llm import ProviderInfo, ModelInfo
+from loguru import logger
+from app.schemas.llm import StreamEvent, StreamEventType
 
 
 class LLMService:
@@ -36,7 +38,8 @@ class LLMService:
     def on_usage_complete(cls, usage_data: Dict[str, Any]):
         # This method can be used to handle usage data, e.g., logging or storing it.
         # For now, we just print it. In a real application, you might want to store it in a database.
-        print("Usage data:", usage_data)
+
+        logger.info(f"LLM Service--Record--Usage data: {usage_data}")
 
     @classmethod
     async def stream_chat(
@@ -44,9 +47,8 @@ class LLMService:
         provider: str,
         model: str,
         messages: List[Dict[str, Any]],
-        on_usage_complete: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[StreamEvent, None]:
 
         cls._ensure_init_handlers()
         handler = cls._handlers.get(provider)
@@ -57,10 +59,12 @@ class LLMService:
         # iterate over it directly. Tests mock this method with a ``MagicMock``
         # that returns an async generator, so no special await handling is
         # required.
-        async for chunk in handler.stream_chat(
+        async for streamEvent in handler.stream_chat(
             model=model,
             messages=messages,
-            on_usage_complete=on_usage_complete or cls.on_usage_complete,
             **kwargs,
         ):
-            yield chunk
+            if streamEvent.type == StreamEventType.USAGE:
+                cls.on_usage_complete(streamEvent.data)
+
+            yield streamEvent
