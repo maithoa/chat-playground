@@ -94,11 +94,12 @@ class GoogleHandler(BaseLLMHandler):
             async for last_chunk in response:
                 if last_chunk.text:
                     if first_chunk:
-                        first_chunk = False
                         time_to_first_chunk = time.perf_counter() - start_time
+                        first_chunk = False
                         logger.info(
                             f"Time to first chunk: {time_to_first_chunk} seconds"
                         )
+
                     yield last_chunk.text
         finally:
             if (
@@ -106,10 +107,8 @@ class GoogleHandler(BaseLLMHandler):
                 and getattr(last_chunk, "usage_metadata", None)
                 and on_usage_complete
             ):
-                end_time = time.perf_counter()
-                duration_seconds = (
-                    (end_time - start_time) if (end_time - start_time) > 0 else 0
-                )
+                duration_seconds = time.perf_counter() - start_time
+                # For google api, then output tokens is stored in usage_metadata's candidates_token_count
                 completion_tokens = (
                     last_chunk.usage_metadata.candidates_token_count or 0
                 )

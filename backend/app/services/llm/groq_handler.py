@@ -36,16 +36,15 @@ class GroqHandler(BaseLLMHandler):
                 content = last_chunk.choices[0].delta.content
                 if content:
                     if first_chunk:
-                        first_chunk = False
                         time_to_first_chunk = time.perf_counter() - start_time
+                        first_chunk = False
                         logger.info(
                             f"Time to first chunk: {time_to_first_chunk} seconds"
                         )
 
                     yield content
         finally:
-            end_time = time.perf_counter()
-            duration_seconds = end_time - start_time
+            duration_seconds = time.perf_counter() - start_time
 
             if start_time:
                 logger.info(f"\nTime taken: {duration_seconds} seconds")
@@ -61,7 +60,7 @@ class GroqHandler(BaseLLMHandler):
                     completion_time_api = last_chunk.usage.completion_time
                 elif last_chunk.usage.total_time and last_chunk.usage.total_time > 0:
                     completion_time_api = last_chunk.usage.total_time
-
+                # Tokens Per Second is calculated based on completion_tokens and completion_time.
                 tokens_per_second = (
                     (last_chunk.usage.completion_tokens / completion_time_api)
                     if completion_time_api and completion_time_api > 0
