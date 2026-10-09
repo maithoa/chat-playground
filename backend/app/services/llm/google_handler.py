@@ -8,6 +8,7 @@ from google.genai import types
 from app.core.config import settings
 from app.models.conversation import MessageRole, MessageBase
 from .base import BaseLLMHandler
+from app.schemas.llm import StreamEvent, StreamEventType
 
 
 class GoogleHandler(BaseLLMHandler):
@@ -58,7 +59,7 @@ class GoogleHandler(BaseLLMHandler):
         messages: List[Dict[str, str]],
         on_usage_complete: Callable[[Dict[str, Any]], None] | None = None,
         **kwargs: Any,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[StreamEvent, None]:
         contents = self._prepare_payload(messages)
 
         # Check the parameters for model config from kwargs
@@ -99,8 +100,9 @@ class GoogleHandler(BaseLLMHandler):
                         logger.info(
                             f"Time to first chunk: {time_to_first_chunk} seconds"
                         )
-
-                    yield last_chunk.text
+                    yield StreamEvent(
+                        type=StreamEventType.CONTENT, data=last_chunk.text
+                    )
         finally:
             if (
                 last_chunk
@@ -124,7 +126,4 @@ class GoogleHandler(BaseLLMHandler):
                     "time_to_first_token_ms": round(time_to_first_chunk * 1000, 2),
                     "tokens_per_second": round(tokens_per_second, 2),
                 }
-                if inspect.iscoroutinefunction(on_usage_complete):
-                    await on_usage_complete(usage_data)
-                else:
-                    on_usage_complete(usage_data)
+                yield StreamEvent(type=StreamEventType.USAGE, data=usage_data)
