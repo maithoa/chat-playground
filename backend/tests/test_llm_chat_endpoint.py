@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 
 from app.main import app
 from app.schemas.llm import ProviderInfo, ModelInfo, ChatRequest
+from app.schemas.llm import StreamEventType, StreamEvent
 
 client = TestClient(app)
 
@@ -49,8 +50,19 @@ async def _mock_stream_chat(*_args, **_kwargs) -> AsyncGenerator[str, None]:
     The real implementation yields strings that represent the LLM response.  For
     the purpose of the test we simply emit two static chunks.
     """
+    usage_data = {
+        "prompt_tokens": 5,
+        "completion_tokens": 15,
+        "total_tokens": 20,
+        "time_to_first_token_ms": 0.5,
+        "tokens_per_second": 200,
+    }
 
-    for chunk in ("chunk1", "chunk2"):
+    for chunk in (
+        StreamEvent(type=StreamEventType.CONTENT, data="chunk1"),
+        StreamEvent(type=StreamEventType.CONTENT, data="chunk2"),
+        StreamEvent(type=StreamEventType.USAGE, data=usage_data),
+    ):
         yield chunk
 
 
@@ -115,17 +127,30 @@ def test_chat_stream_success():
     # Filter only the ``data:`` lines.
     data_lines = [ln for ln in lines if ln.startswith("data:")]
     # Two chunks are emitted by the mock generator, so we expect two lines.
-    assert len(data_lines) == 2
+    assert len(data_lines) == 3
 
     contents = []
+    usage = None
     for line in data_lines:
-        # ``data: {"content": "chunk"}``
+        # ``data: {"type": "content", "content": "chunk1"}``
         json_part = line.removeprefix("data: ").strip()
 
-        payload = json.loads(json_part)
-        contents.append(payload["content"])
+        event_payload = json.loads(json_part)
+
+        event_type = event_payload.get("type")
+        if event_type == StreamEventType.CONTENT.value:
+            contents.append(event_payload["content"])
+        if event_type == StreamEventType.USAGE.value:
+            usage = event_payload["usage"]
 
     assert contents == ["chunk1", "chunk2"]
+    assert usage == {
+        "prompt_tokens": 5,
+        "completion_tokens": 15,
+        "total_tokens": 20,
+        "time_to_first_token_ms": 0.5,
+        "tokens_per_second": 200,
+    }
 
 
 def test_chat_stream_invalid_provider():

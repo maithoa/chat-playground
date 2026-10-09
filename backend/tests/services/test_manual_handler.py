@@ -10,17 +10,17 @@ async def handle_usage(usage_dict):
 
 async def main():
     # handler = OpenAIHandler()
-    handler = GroqHandler()
-    # handler = OpenRouterHandler()
+    # handler = GroqHandler()
+    handler = OpenRouterHandler()
     # handler = GoogleHandler()
     # model = "gpt-4o"
-    model = "openai/gpt-oss-120b"
+    # model = "openai/gpt-oss-120b"
     # model = "nvidia/nemotron-3-ultra-550b-a55b:free"
     # model = "nvidia/nemotron-3.5-lightning:free"
     # model = "stealth/space-bunny-alpha"
     # model = "gemini-3.5-flash-lite"
     # model = "gemini-3.1-pro-preview"
-    # model = "openrouter/free"
+    model = "openrouter/free"
 
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
@@ -55,4 +55,6 @@ curl -N -X POST "http://localhost:8686/api/v1/llm/chat"
     '],'
 '}'
 
+
+python tests/services/test_manual_handler.py
 """
