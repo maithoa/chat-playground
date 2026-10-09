@@ -29,7 +29,6 @@ class OpenRouterHandler(BaseLLMHandler):
         self,
         model: str,
         messages: List[Dict[str, str]],
-        on_usage_complete: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs: Any,
     ) -> AsyncGenerator[StreamEvent, None]:
 
@@ -55,7 +54,7 @@ class OpenRouterHandler(BaseLLMHandler):
                     yield StreamEvent(type=StreamEventType.CONTENT, data=content)
         finally:
 
-            if last_chunk and last_chunk.usage and on_usage_complete:
+            if last_chunk and last_chunk.usage:
                 duration_ms = time.perf_counter() - start_time
                 tokens_per_second = 0
                 if (

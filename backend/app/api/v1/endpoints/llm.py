@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 from app.schemas.llm import ProviderInfo, ChatRequest
 from app.services.llm.service import LLMService
+from app.schemas.llm import StreamEventType, StreamEvent
 
 router = APIRouter(prefix="/llm", tags=["LLM Catalog"])
 
@@ -71,8 +72,8 @@ async def chat_stream(request: ChatRequest):
                 yield streamEvent.to_sse_data()
 
         except Exception as e:
-            error_payload = json.dumps({"error": str(e)}, ensure_ascii=False)
-            yield f"data: {error_payload}\n\n"
+            error_event = StreamEvent(type=StreamEventType.ERROR, data=str(e))
+            yield error_event.to_sse_data()
 
     return StreamingResponse(
         event_generator(),

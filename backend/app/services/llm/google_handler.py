@@ -57,7 +57,6 @@ class GoogleHandler(BaseLLMHandler):
         self,
         model: str,
         messages: List[Dict[str, str]],
-        on_usage_complete: Callable[[Dict[str, Any]], None] | None = None,
         **kwargs: Any,
     ) -> AsyncGenerator[StreamEvent, None]:
         contents = self._prepare_payload(messages)
@@ -104,11 +103,7 @@ class GoogleHandler(BaseLLMHandler):
                         type=StreamEventType.CONTENT, data=last_chunk.text
                     )
         finally:
-            if (
-                last_chunk
-                and getattr(last_chunk, "usage_metadata", None)
-                and on_usage_complete
-            ):
+            if last_chunk and getattr(last_chunk, "usage_metadata", None):
                 duration_seconds = time.perf_counter() - start_time
                 # For google api, then output tokens is stored in usage_metadata's candidates_token_count
                 completion_tokens = (
