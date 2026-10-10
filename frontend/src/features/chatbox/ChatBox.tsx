@@ -8,17 +8,28 @@ import remarkGfm from "remark-gfm";
 import { Coffee } from "lucide-react";
 
 export function ChatBox() {
-  const [temperature] = useState(0.7);
+  // ui state
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // refs
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const streamingBufferRef = useRef<string>("");
+  const timerRef = useRef<number | null>(null);
 
-  // Auto-scroll xuống cuối khi có token mới
+  // Auto-scroll to the end when there is new token
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesEndRef.current?.parentElement;
+    if (!container) return;
+
+    // if is currently streaming , use auto scroll to avoid ui glitch
+    // when generating is done, can use smooth
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: isGenerating ? "auto" : "smooth",
+    });
   };
   // Ref to access button inside SendMsgToModel
   const sendWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -38,6 +49,25 @@ export function ChatBox() {
     el.style.height = `${el.scrollHeight}px`;
   }, [input]);
 
+  // Timer to flush buffer to UI
+  const FLUSH_INTERVAL_MS = 120;
+
+  // function to flush buffer
+  const flushBuffer = () => {
+    if (!streamingBufferRef.current) return;
+
+    const bufferToFlush = streamingBufferRef.current;
+    streamingBufferRef.current = ""; // Reset buffer after sending it to ui
+
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (!last || last.role !== "assistant") return prev;
+
+      const updatedLast = { ...last, content: last.content + bufferToFlush };
+      return [...prev.slice(0, -1), updatedLast];
+    });
+  };
+
   const handleSubmit = async (providerId: string, modelId: string) => {
     if (!input.trim() || isGenerating) return;
 
@@ -52,23 +82,25 @@ export function ChatBox() {
 
     abortControllerRef.current = new AbortController();
 
+    // streaming buffer
+    streamingBufferRef.current = "";
+    // timer buffer
+    timerRef.current = setInterval(flushBuffer, FLUSH_INTERVAL_MS);
+
     try {
       await streamChat({
         provider: providerId,
         model: modelId,
         messages: updatedMessages,
-        temperature: temperature,
         signal: abortControllerRef.current.signal,
         outChunk: (chunk) => {
-          setMessages((prev) => {
-            const last = prev[prev.length - 1];
-            if (!last || last.role !== "assistant") return prev;
-
-            const updatedLast = { ...last, content: last.content + chunk };
-            return [...prev.slice(0, -1), updatedLast];
-          });
+          // only add chunk to buffer
+          streamingBufferRef.current += chunk;
         },
         onUsageComplete: (usage) => {
+          // flush last part of the chunks
+          flushBuffer();
+
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (!last || last.role !== "assistant") return prev;
@@ -91,6 +123,16 @@ export function ChatBox() {
         alert(`Error: ${error.message}`);
       }
     } finally {
+      // Clean up timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      // Clear buffer
+      flushBuffer();
+      streamingBufferRef.current = "";
+
       setIsGenerating(false);
       abortControllerRef.current = null;
     }
@@ -176,7 +218,7 @@ export function ChatBox() {
           </div>
         </div>
       </form>
-      <div className="space-y-2 mt-2 flex items-center justify-between gap-2">
+      <div className="flex-shrink-0 space-y-2 mt-2 flex items-center justify-between gap-2">
         {/* Token counter*/}
         <ConversationTokenCounter
           messages={messages}
