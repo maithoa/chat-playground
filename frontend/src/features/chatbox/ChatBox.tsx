@@ -18,6 +18,10 @@ export function ChatBox() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const streamingBufferRef = useRef<string>("");
   const timerRef = useRef<number | null>(null);
+  // Ref to access button inside SendMsgToModel
+  const sendWrapperRef = useRef<HTMLDivElement | null>(null);
+  // Ref to access textarea for auto-focus
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Auto-scroll to the end when there is new token
   const scrollToBottom = () => {
@@ -31,15 +35,11 @@ export function ChatBox() {
       behavior: isGenerating ? "auto" : "smooth",
     });
   };
-  // Ref to access button inside SendMsgToModel
-  const sendWrapperRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Ref to access textarea for auto-focus
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -158,9 +158,9 @@ export function ChatBox() {
   };
 
   return (
-    <div className="flex flex-1 flex-col min-h-0 max-w-3xl mx-auto p-4 overflow-hidden">
+    <div className="flex flex-col h-full w-full max-w-3xl mx-auto p-4 overflow-hidden">
       {/* Messages Feed */}
-      <div className="flex-1 min-h-0 overflow-y-auto rounded mb-4 space-y-4 flex flex-col">
+      <div className="flex-1 min-h-0 overflow-y-auto rounded mb-4 space-y-4 flex flex-col pr-1">
         {messages.map((msg, index) => {
           const isUser = msg.role === "user";
           return (
@@ -193,47 +193,52 @@ export function ChatBox() {
         })}
         <div ref={messagesEndRef} />
       </div>
-
-      {/* Input & Action Area */}
-      <form onSubmit={(e) => e.preventDefault()} className="flex-shrink-0 space-y-2">
-        <div className="border border-gray-300 rounded-2xl p-3 focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-sm flex flex-col transition-all">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message...(Enter to Send, Shift+Enter for a new line)"
-            className="w-full border-0 focus:outline-none focus:ring-0 p-0 text-sm leading-relaxed resize-none max-h-48 overflow-y-auto block bg-transparent text-gray-800 placeholder-gray-400"
-            rows={2}
-            disabled={isGenerating}
-          />
-          <div
-            ref={sendWrapperRef}
-            className="flex justify-end items-center pt-2 mt-1 border-t border-gray-100"
-          >
-            <SendMsgToModel
-              disabled={isGenerating || !input.trim()}
-              onSend={(provider, model) => handleSubmit(provider, model)}
+      <div className="flex-shrink-0 space-y-2 bg-white pt-2">
+        {/* Input & Action Area */}
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-2">
+          <div className="border border-gray-300 rounded-2xl p-3 focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-sm flex flex-col transition-all">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message...(Enter to Send, Shift+Enter for a new line)"
+              className="w-full border-0 focus:outline-none focus:ring-0 p-0 text-sm leading-relaxed resize-none max-h-48 overflow-y-auto block bg-transparent text-gray-800 placeholder-gray-400"
+              rows={2}
+              disabled={isGenerating}
             />
+            <div
+              ref={sendWrapperRef}
+              className="flex justify-end items-center pt-2 mt-1 border-t border-gray-100"
+            >
+              <SendMsgToModel
+                disabled={isGenerating || !input.trim()}
+                onSend={(provider, model) => handleSubmit(provider, model)}
+              />
+            </div>
           </div>
-        </div>
-      </form>
-      <div className="flex-shrink-0 space-y-2 mt-2 flex items-center justify-between gap-2">
-        {/* Token counter*/}
-        <ConversationTokenCounter
-          messages={messages}
-          streamingContent={messages[messages.length - 1]?.content || ""}
-          isStreaming={isGenerating}
-        />
-        {/* Stop button */}
-        {isGenerating && (
+        </form>
+
+        <div className="flex  mt-2 items-center justify-between gap-2">
+          {/* Token counter*/}
+          <ConversationTokenCounter
+            messages={messages}
+            streamingContent={messages[messages.length - 1]?.content || ""}
+            isStreaming={isGenerating}
+          />
+          {/* Stop button */}
           <button
             onClick={handleStop}
-            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+            disabled={!isGenerating}
+            className={`px-4 py-2 rounded text-xs font-medium transition-colors ${
+              isGenerating
+                ? "bg-red-500 text-white hover:bg-red-600 cursor-pointer"
+                : "bg-gray-100 text-gray-400 cursor-not-allowed select-none"
+            }`}
           >
             Stop
           </button>
-        )}
+        </div>
       </div>
     </div>
   );

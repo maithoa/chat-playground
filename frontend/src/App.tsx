@@ -12,7 +12,7 @@ function App() {
       </header>
 
       {/* Main Chat Interface */}
-      <main className="flex flex-1 min-h-0 max-w-3xl w-full mx-auto p-4 ">
+      <main className="h-screen w-screen overflow-hidden bg-gray-50 flex flex-col">
         <ChatBox />
       </main>
     </div>
