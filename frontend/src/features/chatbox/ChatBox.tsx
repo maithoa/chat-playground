@@ -2,10 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { streamChat } from "@/services/llmService";
 import type { Message } from "@/types/chat";
 import { SendMsgToModel } from "@/components/Button/SendMsgToModel/SendMsgToModel";
-import { ConversationTokenCounter } from "@/components/Button/ConversationTokenCounter";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { Coffee } from "lucide-react";
+import { StreamWindow } from "@/components/Module/StreamWindow";
 
 export function ChatBox() {
   // ui state
@@ -15,30 +12,12 @@ export function ChatBox() {
 
   // refs
   const abortControllerRef = useRef<AbortController | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const streamingBufferRef = useRef<string>("");
   const timerRef = useRef<number | null>(null);
   // Ref to access button inside SendMsgToModel
   const sendWrapperRef = useRef<HTMLDivElement | null>(null);
   // Ref to access textarea for auto-focus
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  // Auto-scroll to the end when there is new token
-  const scrollToBottom = () => {
-    const container = messagesEndRef.current?.parentElement;
-    if (!container) return;
-
-    // if is currently streaming , use auto scroll to avoid ui glitch
-    // when generating is done, can use smooth
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: isGenerating ? "auto" : "smooth",
-    });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -158,42 +137,10 @@ export function ChatBox() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full max-w-3xl mx-auto p-4 overflow-hidden">
-      {/* Messages Feed */}
-      <div className="flex-1 min-h-0 overflow-y-auto rounded mb-4 space-y-4 flex flex-col pr-1">
-        {messages.map((msg, index) => {
-          const isUser = msg.role === "user";
-          return (
-            /* 1. Outer Chat Bubble (Handles background, padding, alignment) */
-            <div
-              key={index}
-              className={`p-4 rounded-lg max-w-[85%] ${
-                isUser
-                  ? "bg-blue-600 text-white self-end"
-                  : "bg-gray-100 text-gray-800 self-start"
-              }`}
-            >
-              {/* 2. Inner Typography Wrapper (Handles Markdown styling) */}
-              <div
-                className={`prose prose-sm max-w-none text-left ${
-                  isUser ? "prose-invert" : "prose-neutral"
-                }`}
-              >
-                {msg.content ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                ) : isUser ? null : (
-                  <span className="flex items-center gap-1.5 text-gray-800 animate-pulse text-xs font-medium">
-                    <Coffee />
-                    Thinking....
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-        <div ref={messagesEndRef} />
-      </div>
-      <div className="flex-shrink-0 space-y-2 bg-white pt-2">
+    <div className="flex flex-col flex-1 min-h-0 w-full max-w-3xl p-4 overflow-hidden">
+      <StreamWindow messages={messages} isGenerating={isGenerating} onStop={handleStop} />
+
+      <div className="flex-shrink-0 space-y-2 pt-2">
         {/* Input & Action Area */}
         <form onSubmit={(e) => e.preventDefault()} className="space-y-2">
           <div className="border border-gray-300 rounded-2xl p-3 focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-sm flex flex-col transition-all">
@@ -218,27 +165,6 @@ export function ChatBox() {
             </div>
           </div>
         </form>
-
-        <div className="flex  mt-2 items-center justify-between gap-2">
-          {/* Token counter*/}
-          <ConversationTokenCounter
-            messages={messages}
-            streamingContent={messages[messages.length - 1]?.content || ""}
-            isStreaming={isGenerating}
-          />
-          {/* Stop button */}
-          <button
-            onClick={handleStop}
-            disabled={!isGenerating}
-            className={`px-4 py-2 rounded text-xs font-medium transition-colors ${
-              isGenerating
-                ? "bg-red-500 text-white hover:bg-red-600 cursor-pointer"
-                : "bg-gray-100 text-gray-400 cursor-not-allowed select-none"
-            }`}
-          >
-            Stop
-          </button>
-        </div>
       </div>
     </div>
   );
