@@ -137,7 +137,7 @@ export function ChatBox() {
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 w-full max-w-3xl p-4 overflow-hidden">
+    <div className="flex flex-col h-full w-full max-w-3xl p-4 overflow-hidden">
       <StreamWindow messages={messages} isGenerating={isGenerating} onStop={handleStop} />
 
       <div className="flex-shrink-0 space-y-2 pt-2">
