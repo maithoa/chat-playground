@@ -20,7 +20,7 @@ dependencies = [
     "groq>=1.7.0",
     "google-genai>=2.25.0",
     "sqlalchemy[asyncio]>=2.0.0",
-    "loguru>=0.7.2"
+    "loguru>=0.7.0",
 ]
 
 [project.optional-dependencies]
