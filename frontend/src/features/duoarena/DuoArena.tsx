@@ -123,7 +123,7 @@ export function DuoArena() {
             }
             return prev;
           });
-          alert(`Error: ${error.message}`);
+          console.error(`Error: ${error.message}`);
         }
       } finally {
         if (timerRef.current) {
@@ -138,7 +138,7 @@ export function DuoArena() {
         abortControllerRef.current = null;
       }
     } catch (er: any) {
-      alert(`Error: ${er.message}`);
+      console.error(`Error: ${er.message}`);
     } finally {
       setInput("");
     }

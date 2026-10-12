@@ -13,7 +13,7 @@ export function ChatBox() {
   // refs
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingBufferRef = useRef<string>("");
-  const timerRef = useRef<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Ref to access button inside SendMsgToModel
   const sendWrapperRef = useRef<HTMLDivElement | null>(null);
   // Ref to access textarea for auto-focus
@@ -40,7 +40,9 @@ export function ChatBox() {
 
     setMessages((prev) => {
       const last = prev[prev.length - 1];
-      if (!last || last.role !== "assistant") return prev;
+      if (!last || last.role !== "assistant") {
+        return [...prev, { role: "assistant", content: bufferToFlush }];
+      }
 
       const updatedLast = { ...last, content: last.content + bufferToFlush };
       return [...prev.slice(0, -1), updatedLast];
@@ -64,7 +66,7 @@ export function ChatBox() {
     // streaming buffer
     streamingBufferRef.current = "";
     // timer buffer
-    timerRef.current = setInterval(flushBuffer, FLUSH_INTERVAL_MS);
+    timerRef.current = window.setInterval(flushBuffer, FLUSH_INTERVAL_MS);
 
     try {
       await streamChat({
@@ -99,7 +101,7 @@ export function ChatBox() {
           }
           return prev;
         });
-        alert(`Error: ${error.message}`);
+        console.log("error:", error.message);
       }
     } finally {
       // Clean up timer
