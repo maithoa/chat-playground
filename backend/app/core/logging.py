@@ -28,5 +28,4 @@ def init_logger():
             enqueue=True,  # Use a queue to handle logging in multi-threaded environments
             backtrace=True,  # Enable backtrace for better error context
             diagnose=True,  # Show variable values
-            encoding="utf-8",  # Ensure logs are written in UTF-8
         )
