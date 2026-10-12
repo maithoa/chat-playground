@@ -23,7 +23,7 @@ export function DuoArena() {
 
   const textInputAreaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // const sendButtonWrapRef = useRef<HTMLButtonElement | null>(null);
+  const buttonRunRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const el = textInputAreaRef.current;
@@ -211,10 +211,21 @@ export function DuoArena() {
     executeStream("groq", "openai/gpt-oss-120b", "A", currentPrompt);
     executeStream("openrouter", "openrouter/free", "B", currentPrompt);
   };
+  // Handle Keydown for Enter to hit Run button
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!(isGeneratingA && isGeneratingB && input.trim())) {
+        // Find the Run button and click it
+        buttonRunRef.current?.click();
+      }
+    }
+  };
+
   // Generate UI
   return (
     <div className="flex flex-col flex-1 min-h-0 w-full max-w-7xl p-4 overflow-hidden gap-3">
-      {/* 2 Cột StreamWindow đặt song song */}
+      {/* 2 Paralell streaming windows */}
       <div className="flex-1 min-h-0 flex gap-4 overflow-hidden">
         <div className="flex flex-col flex-1 min-w-0 h-full">
           <div className="text-xs font-semibold text-gray-500 mb-1 px-1">Model A</div>
@@ -242,6 +253,7 @@ export function DuoArena() {
               ref={textInputAreaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="Type a message for both models..."
               className="w-full border-0 focus:outline-none p-0 text-sm resize-none max-h-32 bg-transparent"
               rows={2}
@@ -255,6 +267,7 @@ export function DuoArena() {
             onClick={handleRunBoth}
 
             disabled={isGeneratingA || isGeneratingB || !input.trim()}
+            ref={buttonRunRef}
           >
             Run
           </button>
