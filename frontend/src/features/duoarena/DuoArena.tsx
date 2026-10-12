@@ -58,141 +58,84 @@ export function DuoArena() {
   const executeStream = async (
     providerId: string,
     modelId: string,
-    streamId: string,
+    streamId: "A" | "B",
     userPrompt: string
   ) => {
+    // setup variables based on streamId
+    const isA = streamId === "A";
+    const messages = isA ? messagesA : messagesB;
+    const setMessages = isA ? setMessagesA : setMessagesB;
+    const setIsGenerating = isA ? setIsGeneratingA : setIsGeneratingB;
+    const abortControllerRef = isA ? abortControllerRefA : abortControllerRefB;
+    const streamingBufferRef = isA ? streamingBufferRefA : streamingBufferRefB;
+    const timerRef = isA ? timerRefA : timerRefB;
+
     // form the message object and update the messages state
     const userMessage: Message = { role: "user", content: userPrompt };
 
     try {
-      if (streamId === "A") {
-        // Processing for Stream A
-        const updatedMessagesA = [...messagesA, userMessage];
+      // Processing for Stream A
+      const updatedMessages = [...messages, userMessage];
 
-        //add empty assistant message to the state of Stream A to prepare for streaming
-        setMessagesA([...updatedMessagesA, { role: "assistant", content: "" }]);
-        setIsGeneratingA(true);
+      //add empty assistant message to the state of Stream A to prepare for streaming
+      setMessages([...updatedMessages, { role: "assistant", content: "" }]);
+      setIsGenerating(true);
 
-        abortControllerRefA.current = new AbortController();
+      abortControllerRef.current = new AbortController();
 
-        streamingBufferRefA.current = "";
+      streamingBufferRef.current = "";
 
-        // 👉 Use same flushBuffer
-        timerRefA.current = window.setInterval(() => {
-          flushBuffer(setMessagesA, streamingBufferRefA);
-        }, FLUSH_INTERVAL_MS);
+      // 👉 Use same flushBuffer
+      timerRef.current = window.setInterval(() => {
+        flushBuffer(setMessages, streamingBufferRef);
+      }, FLUSH_INTERVAL_MS);
 
-        try {
-          await streamChat({
-            provider: providerId,
-            model: modelId,
-            messages: updatedMessagesA,
-            signal: abortControllerRefA.current.signal,
-            outChunk: (chunk) => {
-              // only add chunk to buffer
-              streamingBufferRefA.current += chunk;
-            },
-            onUsageComplete: (usage) => {
-              // flush last part of the chunks
-              flushBuffer(setMessagesA, streamingBufferRefA);
+      try {
+        await streamChat({
+          provider: providerId,
+          model: modelId,
+          messages: updatedMessages,
+          signal: abortControllerRef.current.signal,
+          outChunk: (chunk) => {
+            // only add chunk to buffer
+            streamingBufferRef.current += chunk;
+          },
+          onUsageComplete: (usage) => {
+            // flush last part of the chunks
+            flushBuffer(setMessages, streamingBufferRef);
 
-              setMessagesA((prev) => {
-                const last = prev[prev.length - 1];
-                if (!last || last.role !== "assistant") return prev;
-
-                return [...prev.slice(0, -1), { ...last, usage }];
-              });
-            },
-          });
-        } catch (error: any) {
-          if (error.name === "AbortError") {
-            console.log("Stream stopped by user.");
-          } else {
-            setMessagesA((prev) => {
+            setMessages((prev) => {
               const last = prev[prev.length - 1];
-              if (last && last.role === "assistant" && last.content === "") {
-                return prev.slice(0, -1);
-              }
-              return prev;
+              if (!last || last.role !== "assistant") return prev;
+
+              return [...prev.slice(0, -1), { ...last, usage }];
             });
-            alert(`Error: ${error.message}`);
-          }
-        } finally {
-          if (timerRefA.current) {
-            clearInterval(timerRefA.current);
-            timerRefA.current = null;
-          }
-          // Clear buffer
-          flushBuffer(setMessagesA, streamingBufferRefA);
-          streamingBufferRefA.current = "";
-
-          setIsGeneratingA(false);
-          abortControllerRefA.current = null;
-        }
-      } else if (streamId === "B") {
-        // Processing for Stream B
-        const updatedMessagesB = [...messagesB, userMessage];
-        setMessagesB([...updatedMessagesB, { role: "assistant", content: "" }]);
-        setIsGeneratingB(true);
-
-        abortControllerRefB.current = new AbortController();
-
-        streamingBufferRefB.current = "";
-
-        // 👉 Use same flushBuffer
-        timerRefB.current = window.setInterval(() => {
-          flushBuffer(setMessagesB, streamingBufferRefB);
-        }, FLUSH_INTERVAL_MS);
-
-        try {
-          await streamChat({
-            provider: providerId,
-            model: modelId,
-            messages: updatedMessagesB,
-            signal: abortControllerRefB.current.signal,
-            outChunk: (chunk) => {
-              // only add chunk to buffer
-              streamingBufferRefB.current += chunk;
-            },
-            onUsageComplete: (usage) => {
-              // flush last part of the chunks
-              flushBuffer(setMessagesB, streamingBufferRefB);
-
-              setMessagesB((prev) => {
-                const last = prev[prev.length - 1];
-                if (!last || last.role !== "assistant") return prev;
-
-                return [...prev.slice(0, -1), { ...last, usage }];
-              });
-            },
+          },
+        });
+      } catch (error: any) {
+        if (error.name === "AbortError") {
+          console.log("Stream stopped by user.");
+        } else {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === "assistant" && last.content === "") {
+              return prev.slice(0, -1);
+            }
+            return prev;
           });
-        } catch (error: any) {
-          if (error.name === "AbortError") {
-            console.log("Stream stopped by user.");
-          } else {
-            setMessagesB((prev) => {
-              const last = prev[prev.length - 1];
-              if (last && last.role === "assistant" && last.content === "") {
-                return prev.slice(0, -1);
-              }
-              return prev;
-            });
-            alert(`Error: ${error.message}`);
-          }
-        } finally {
-          if (timerRefB.current) {
-            clearInterval(timerRefB.current);
-            timerRefB.current = null;
-          }
-          // Clear buffer
-          flushBuffer(setMessagesB, streamingBufferRefB);
-          streamingBufferRefB.current = "";
-
-          setIsGeneratingB(false);
-          abortControllerRefB.current = null;
+          alert(`Error: ${error.message}`);
         }
-      } else {
-        alert(`Error: Stream is not A or B`);
+      } finally {
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        // Clear buffer
+        flushBuffer(setMessages, streamingBufferRef);
+        streamingBufferRef.current = "";
+
+        setIsGenerating(false);
+        abortControllerRef.current = null;
       }
     } catch (er: any) {
       alert(`Error: ${er.message}`);
@@ -265,9 +208,13 @@ export function DuoArena() {
           {/* Handle simultaneous calls to 2 models */}
           <button
             onClick={handleRunBoth}
-
             disabled={isGeneratingA || isGeneratingB || !input.trim()}
             ref={buttonRunRef}
+            className={`px-4 py-2 rounded text-xs font-medium transition-colors ${
+              isGeneratingA || isGeneratingB || !input.trim()
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed select-none"
+                : "bg-blue-500 text-white hover:bg-blue-600 cursor-pointer"
+            }`}
           >
             Run
           </button>
