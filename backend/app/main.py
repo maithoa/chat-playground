@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import asynccontextmanager
 from app.core.config import settings
 from app.core.db import init_db
+from app.core.logging import init_logger
 from app.api.v1.router import api_router
 
 
@@ -18,6 +19,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
 
+
+# Initialize logger based on settings from .env
+init_logger()
 
 # Init FastAPI app
 app = FastAPI(title=settings.APP_NAME, version=settings.API_V1_STR, lifespan=lifespan)

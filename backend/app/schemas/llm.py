@@ -1,4 +1,8 @@
-from typing import List, Optional
+import json
+
+from typing import Any, List, Optional
+from enum import Enum
+
 from pydantic import BaseModel, Field
 from app.models.conversation import MessageBase
 
@@ -28,3 +32,24 @@ class ChatRequest(BaseModel):
     )
     messages: List[MessageBase] = Field(..., description="message history")
     temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0)
+
+
+class StreamEventType(str, Enum):
+    CONTENT = "content"
+    USAGE = "usage"
+    ERROR = "error"
+
+
+class StreamEvent(BaseModel):
+    type: StreamEventType
+    data: Any
+
+    def to_sse_data(self) -> str:
+        """
+        Serialize the payload for returning response to client
+
+        Returns:
+            {"type": "content", "content": "..."} or {"type": "usage", "usage": {...}}
+        """
+        payload = {"type": self.type.value, self.type.value: self.data}
+        return f"data: {json.dumps(payload,ensure_ascii=False)}\n\n"

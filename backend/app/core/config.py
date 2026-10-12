@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str | None = None
     GOOGLE_API_KEY: str | None = None
 
+    # Logging configuration
+    LOG_LEVEL: str | None = None
+    LOG_FILE_PATH: str | None = None
+
     #  Use Pydantic V2 model config
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env", env_file_encoding="utf-8", extra="ignore"

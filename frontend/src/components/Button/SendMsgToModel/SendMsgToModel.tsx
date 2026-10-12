@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
-import type { ProviderInfo } from "../types/llm";
-import { env } from "../config/env";
+import type { ProviderInfo } from "@/types/llm";
+import { env } from "@/config/env";
 
-interface SendMsgToModelProps {
+export interface SendMsgToModelProps {
   // Send message to backend
   onSend: (providerId: string, modelId: string) => void;
   disabled?: boolean;
@@ -88,6 +88,7 @@ export const SendMsgToModel: React.FC<SendMsgToModelProps> = ({
       <button
         type="submit"
         disabled={disabled}
+        aria-label="Send via"
         onClick={() => onSend(selectedProviderId, selectedModelId)}
         className={`
                     relative inline-flex items-center rounded-l-md px-4 py-2 text-sm font-semibold text-white

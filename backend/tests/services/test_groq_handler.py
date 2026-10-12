@@ -1,8 +1,8 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.core.config import settings
 from app.services.llm.groq_handler import GroqHandler
+from app.schemas.llm import StreamEvent, StreamEventType
+from tests.utils import IS_POSITIVE
 
 
 class MockChunk:
@@ -19,11 +19,11 @@ class MockChunk:
 
 
 def _mock_client(chunks):
-    """Create an ``AsyncMock`` client that yields the provided *chunks*.
+    """Create an ``AsyncMock`` client that yields ``StreamEvent`` objects.
 
-    The handler invokes ``self.client.chat.completions.create`` which returns
-    an async generator.  This helper supplies a mock ``create`` method that
-    yields the supplied mock chunks.
+    ``chunks`` is a list of ``MockChunk`` objects (containing ``content`` and an
+    optional ``usage`` attribute). For each chunk we emit a ``CONTENT`` event if
+    ``content`` is present, and a ``USAGE`` event if ``usage`` exists.
     """
 
     async def mock_stream():
@@ -40,29 +40,42 @@ async def test_groq_handler_stream_chat_with_async_usage_callback():
     """Validate async ``on_usage_complete`` receives correct usage data."""
 
     usage = type(
-        "usage", (), {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
+        "usage",
+        (),
+        {
+            "prompt_tokens": 5,
+            "completion_tokens": 10,
+            "total_tokens": 15,
+            "completion_time": 0.1,
+            "total_time": 0.1,
+        },
     )()
     chunks = [MockChunk("Hello"), MockChunk("world"), MockChunk(None, usage)]
     mock_client = _mock_client(chunks)
 
     async_usage_data = []
 
-    async def async_callback(data):
-        async_usage_data.append(data)
-
     with patch("app.services.llm.groq_handler.AsyncGroq", return_value=mock_client):
         handler = GroqHandler(api_key="dummy-key")
         result = []
-        async for chunk in handler.stream_chat(
+        async for ev in handler.stream_chat(
             model="groq/gemma-2",
             messages=[{"role": "user", "content": "hi"}],
-            on_usage_complete=async_callback,
         ):
-            result.append(chunk)
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+            if ev.type == StreamEventType.USAGE:
+                async_usage_data.append(ev.data)
 
     assert result == ["Hello", "world"]
     assert async_usage_data == [
-        {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
+        {
+            "prompt_tokens": 5,
+            "completion_tokens": 10,
+            "total_tokens": 15,
+            "time_to_first_token_ms": IS_POSITIVE,
+            "tokens_per_second": 100,
+        }
     ]
 
 
@@ -71,29 +84,42 @@ async def test_groq_handler_stream_chat_with_sync_usage_callback():
     """Validate sync ``on_usage_complete`` works as expected."""
 
     usage = type(
-        "Usage", (), {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5}
+        "Usage",
+        (),
+        {
+            "prompt_tokens": 2,
+            "completion_tokens": 3,
+            "completion_time": 0.08,
+            "total_tokens": 5,
+            "total_time": 0.1,
+        },
     )()
     chunks = [MockChunk("Test"), MockChunk(None, usage)]
     mock_client = _mock_client(chunks)
 
     sync_usage_data = []
 
-    def sync_callback(data):
-        sync_usage_data.append(data)
-
     with patch("app.services.llm.groq_handler.AsyncGroq", return_value=mock_client):
         handler = GroqHandler(api_key="dummy-key")
         result = []
-        async for chunk in handler.stream_chat(
+        async for ev in handler.stream_chat(
             model="groq/gemma-2",
             messages=[{"role": "user", "content": "hi"}],
-            on_usage_complete=sync_callback,
         ):
-            result.append(chunk)
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+            if ev.type == StreamEventType.USAGE:
+                sync_usage_data.append(ev.data)
 
     assert result == ["Test"]
     assert sync_usage_data == [
-        {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5}
+        {
+            "prompt_tokens": 2,
+            "completion_tokens": 3,
+            "total_tokens": 5,
+            "time_to_first_token_ms": IS_POSITIVE,
+            "tokens_per_second": 37.5,
+        }
     ]
 
 

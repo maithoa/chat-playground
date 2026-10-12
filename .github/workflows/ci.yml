@@ -18,6 +18,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip" # Automate pip cache to speed up for next run
+          cache-dependency-path: "backend/pyproject.toml"
 
       - name: Install Backend dependencies
         working-directory: backend

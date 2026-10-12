@@ -1,7 +1,7 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ModelSelector } from "./ModelSelector";
-import type { ProviderInfo } from "../types/llm";
+import { ModelSelector } from "@/components/Dropdown/ModelSelector/ModelSelector";
+import type { ProviderInfo } from "@/types/llm";
 
 // Mock dữ liệu API trả về từ Backend
 const mockProviders: ProviderInfo[] = [
@@ -10,8 +10,8 @@ const mockProviders: ProviderInfo[] = [
     name: "OpenAI",
     is_active: true,
     models: [
-      { id: "gpt-4o", name: "GPT-4o" },
-      { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
+      { id: "gpt-4o", name: "GPT-4o", provider_id: "openai" },
+      { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo", provider_id: "openai" },
     ],
   },
 ];

@@ -1,8 +1,9 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.llm.openrouter_handler import OpenRouterHandler
+from app.schemas.llm import StreamEvent, StreamEventType
 from openai.types.completion_usage import CompletionUsage
+from tests.utils import IS_POSITIVE
 
 
 # Helper class to mock a chunk returned from the OpenRouter API, optionally with usage data
@@ -57,19 +58,27 @@ async def test_openrouter_handler_stream_chat_with_async_usage_callback():
         handler = OpenRouterHandler(api_key="sk-test-key")
         messages = [{"role": "user", "content": "Hi"}]
         result = []
-        async for chunk in handler.stream_chat(
+        async_usage_data = []
+        async for ev in handler.stream_chat(
             model="openrouter/gpt-4",
             messages=messages,
-            on_usage_complete=async_callback,
-            include_usage=True,
         ):
-            result.append(chunk)
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+            if ev.type == StreamEventType.USAGE:
+                async_usage_data.append(ev.data)
 
     # Verify streamed content (excluding the final ``None`` chunk)
     assert result == ["Hello", ",", "world"]
     # Verify the async callback was invoked exactly once with the expected dict
     assert async_usage_data == [
-        {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
+        {
+            "prompt_tokens": 5,
+            "completion_tokens": 10,
+            "total_tokens": 15,
+            "time_to_first_token_ms": IS_POSITIVE,
+            "tokens_per_second": IS_POSITIVE,
+        }
     ]
 
 
@@ -87,26 +96,30 @@ async def test_openrouter_handler_stream_chat_with_sync_usage_callback():
 
     sync_usage_data = []
 
-    def sync_callback(data):
-        sync_usage_data.append(data)
-
     with patch(
         "app.services.llm.openrouter_handler.AsyncOpenAI", return_value=mock_client
     ):
         handler = OpenRouterHandler(api_key="sk-test-key")
         messages = [{"role": "user", "content": "Hello"}]
         result = []
-        async for chunk in handler.stream_chat(
+        async for ev in handler.stream_chat(
             model="openrouter/gpt-4",
             messages=messages,
-            on_usage_complete=sync_callback,
-            include_usage=True,
         ):
-            result.append(chunk)
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+            if ev.type == StreamEventType.USAGE:
+                sync_usage_data.append(ev.data)
 
     assert result == ["Test"]
     assert sync_usage_data == [
-        {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5}
+        {
+            "prompt_tokens": 2,
+            "completion_tokens": 3,
+            "total_tokens": 5,
+            "time_to_first_token_ms": IS_POSITIVE,
+            "tokens_per_second": IS_POSITIVE,
+        }
     ]
 
 
