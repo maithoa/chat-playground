@@ -2,33 +2,23 @@ import { useState, useRef, useEffect } from "react";
 import { streamChat } from "@/services/llmService";
 import type { Message } from "@/types/chat";
 import { SendMsgToModel } from "@/components/Button/SendMsgToModel/SendMsgToModel";
-import { ConversationTokenCounter } from "@/components/Button/ConversationTokenCounter";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { Coffee } from "lucide-react";
+import { StreamWindow } from "@/components/Module/StreamWindow";
 
 export function ChatBox() {
-  const [temperature] = useState(0.7);
+  // ui state
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // refs
   const abortControllerRef = useRef<AbortController | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-
-  // Auto-scroll xuống cuối khi có token mới
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const streamingBufferRef = useRef<string>("");
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Ref to access button inside SendMsgToModel
   const sendWrapperRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
   // Ref to access textarea for auto-focus
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -37,6 +27,27 @@ export function ChatBox() {
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [input]);
+
+  // Timer to flush buffer to UI
+  const FLUSH_INTERVAL_MS = 120;
+
+  // function to flush buffer
+  const flushBuffer = () => {
+    if (!streamingBufferRef.current) return;
+
+    const bufferToFlush = streamingBufferRef.current;
+    streamingBufferRef.current = ""; // Reset buffer after sending it to ui
+
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (!last || last.role !== "assistant") {
+        return [...prev, { role: "assistant", content: bufferToFlush }];
+      }
+
+      const updatedLast = { ...last, content: last.content + bufferToFlush };
+      return [...prev.slice(0, -1), updatedLast];
+    });
+  };
 
   const handleSubmit = async (providerId: string, modelId: string) => {
     if (!input.trim() || isGenerating) return;
@@ -52,23 +63,25 @@ export function ChatBox() {
 
     abortControllerRef.current = new AbortController();
 
+    // streaming buffer
+    streamingBufferRef.current = "";
+    // timer buffer
+    timerRef.current = window.setInterval(flushBuffer, FLUSH_INTERVAL_MS);
+
     try {
       await streamChat({
         provider: providerId,
         model: modelId,
         messages: updatedMessages,
-        temperature: temperature,
         signal: abortControllerRef.current.signal,
         outChunk: (chunk) => {
-          setMessages((prev) => {
-            const last = prev[prev.length - 1];
-            if (!last || last.role !== "assistant") return prev;
-
-            const updatedLast = { ...last, content: last.content + chunk };
-            return [...prev.slice(0, -1), updatedLast];
-          });
+          // only add chunk to buffer
+          streamingBufferRef.current += chunk;
         },
         onUsageComplete: (usage) => {
+          // flush last part of the chunks
+          flushBuffer();
+
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (!last || last.role !== "assistant") return prev;
@@ -88,9 +101,19 @@ export function ChatBox() {
           }
           return prev;
         });
-        alert(`Error: ${error.message}`);
+        console.log("error:", error.message);
       }
     } finally {
+      // Clean up timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      // Clear buffer
+      flushBuffer();
+      streamingBufferRef.current = "";
+
       setIsGenerating(false);
       abortControllerRef.current = null;
     }
@@ -116,82 +139,34 @@ export function ChatBox() {
   };
 
   return (
-    <div className="flex flex-1 flex-col min-h-0 max-w-3xl mx-auto p-4 overflow-hidden">
-      {/* Messages Feed */}
-      <div className="flex-1 min-h-0 overflow-y-auto rounded mb-4 space-y-4 flex flex-col">
-        {messages.map((msg, index) => {
-          const isUser = msg.role === "user";
-          return (
-            /* 1. Outer Chat Bubble (Handles background, padding, alignment) */
-            <div
-              key={index}
-              className={`p-4 rounded-lg max-w-[85%] ${
-                isUser
-                  ? "bg-blue-600 text-white self-end"
-                  : "bg-gray-100 text-gray-800 self-start"
-              }`}
-            >
-              {/* 2. Inner Typography Wrapper (Handles Markdown styling) */}
-              <div
-                className={`prose prose-sm max-w-none text-left ${
-                  isUser ? "prose-invert" : "prose-neutral"
-                }`}
-              >
-                {msg.content ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                ) : isUser ? null : (
-                  <span className="flex items-center gap-1.5 text-gray-800 animate-pulse text-xs font-medium">
-                    <Coffee />
-                    Thinking....
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-        <div ref={messagesEndRef} />
-      </div>
+    <div className="flex flex-col h-full w-full max-w-3xl p-4 overflow-hidden">
+      <StreamWindow messages={messages} isGenerating={isGenerating} onStop={handleStop} />
 
-      {/* Input & Action Area */}
-      <form onSubmit={(e) => e.preventDefault()} className="flex-shrink-0 space-y-2">
-        <div className="border border-gray-300 rounded-2xl p-3 focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-sm flex flex-col transition-all">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message...(Enter to Send, Shift+Enter for a new line)"
-            className="w-full border-0 focus:outline-none focus:ring-0 p-0 text-sm leading-relaxed resize-none max-h-48 overflow-y-auto block bg-transparent text-gray-800 placeholder-gray-400"
-            rows={2}
-            disabled={isGenerating}
-          />
-          <div
-            ref={sendWrapperRef}
-            className="flex justify-end items-center pt-2 mt-1 border-t border-gray-100"
-          >
-            <SendMsgToModel
-              disabled={isGenerating || !input.trim()}
-              onSend={(provider, model) => handleSubmit(provider, model)}
+      <div className="flex-shrink-0 space-y-2 pt-2">
+        {/* Input & Action Area */}
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-2">
+          <div className="border border-gray-300 rounded-2xl p-3 focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-sm flex flex-col transition-all">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message...(Enter to Send, Shift+Enter for a new line)"
+              className="w-full border-0 focus:outline-none focus:ring-0 p-0 text-sm leading-relaxed resize-none max-h-48 overflow-y-auto block bg-transparent text-gray-800 placeholder-gray-400"
+              rows={2}
+              disabled={isGenerating}
             />
+            <div
+              ref={sendWrapperRef}
+              className="flex justify-end items-center pt-2 mt-1 border-t border-gray-100"
+            >
+              <SendMsgToModel
+                disabled={isGenerating || !input.trim()}
+                onSend={(provider, model) => handleSubmit(provider, model)}
+              />
+            </div>
           </div>
-        </div>
-      </form>
-      <div className="space-y-2 mt-2 flex items-center justify-between gap-2">
-        {/* Token counter*/}
-        <ConversationTokenCounter
-          messages={messages}
-          streamingContent={messages[messages.length - 1]?.content || ""}
-          isStreaming={isGenerating}
-        />
-        {/* Stop button */}
-        {isGenerating && (
-          <button
-            onClick={handleStop}
-            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-          >
-            Stop
-          </button>
-        )}
+        </form>
       </div>
     </div>
   );

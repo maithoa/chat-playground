@@ -88,6 +88,7 @@ export const SendMsgToModel: React.FC<SendMsgToModelProps> = ({
       <button
         type="submit"
         disabled={disabled}
+        aria-label="Send via"
         onClick={() => onSend(selectedProviderId, selectedModelId)}
         className={`
                     relative inline-flex items-center rounded-l-md px-4 py-2 text-sm font-semibold text-white

@@ -26,10 +26,13 @@ You MUST export and use the exact TypeScript interfaces below without modificati
 ```typescript
 export type Role = "user" | "assistant" | "system";
 
+
 export interface MessageUsage {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  time_to_first_token_ms: number;
+  tokens_per_second: number;
 }
 
 export interface Message {
@@ -44,7 +47,7 @@ export interface StreamChatParams {
   messages: Message[];
   temperature: number;
   outChunk: (chunk: string) => void;
-  onUsageComplete?: (usage: MessageUsage) => void;
+  onUsageComplete: (usage: MessageUsage) => void;
   signal?: AbortSignal;
 }
 
@@ -63,13 +66,6 @@ export interface ProviderInfo {
   models: ModelInfo[];
 }
 
-export interface StreamMetrics {
-  startTime: number;
-  timeToFirstTokenMs?: number;
-  totalDurationMs?: number;
-  tokensPerSecond?: number;
-  usage?: MessageUsage;
-}
 
 export type StreamStatus = "idle" | "streaming" | "completed" | "error";
 
@@ -112,12 +108,11 @@ All state modifications MUST go through a single `arenaReducer`
 
 ## 5. Required Component Hierarchy
 
-- `src/features/arena/components/ArenaContainer.tsx` (Parent wrapper holding `useDualArena`)
-  ├── `src/features/arena/components/ArenaHeader.tsx` (Global prompt input & dual trigger)
-  └── `src/features/arena/components/StreamColumn.tsx` (Render individual stream A/B)
-      ├── `ModelSelector.tsx`
-      ├── `MessageList.tsx`
-      └── `StreamMetricsBadge.tsx`
+- `
+  ├── `src/components/Button/ConversationTokenCounter.tsx` (Global prompt input & dual trigger)
+  └── `src/components/Module/StreamWindow.tsx` (Render individual stream A/B and use ConversationTokenCounter)
+  ├── `src/features/duoarena/DuoArena.tsx` (Global prompt input & dual trigger)
+
 
 ## 6. Definition of Done
 Before marking execution complete, the Agent MUST run and pass:

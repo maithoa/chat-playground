@@ -1,8 +1,8 @@
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-from app.core.config import settings
+from unittest.mock import AsyncMock, patch
 from app.services.llm.google_handler import GoogleHandler
+from app.schemas.llm import StreamEvent, StreamEventType
+from tests.utils import IS_POSITIVE
 
 
 class MockUsageMetadata:
@@ -32,18 +32,14 @@ class MockChunk:
         self.usage_metadata = usage_metadata
 
 
-class GreaterThanZero:
-    def __eq__(self, other):
-        return isinstance(other, (int, float)) and other > 0
-
-
 def _mock_client(chunks):
-    """Create an ``AsyncMock`` client that yields *chunks*.
+    """Create an ``AsyncMock`` client that yields ``StreamEvent`` objects.
 
-    The handler calls ``self.client.aio.models.generate_content_stream`` and
-    iterates over the async generator it returns.  This helper builds a client
-    where that method returns an async generator yielding the supplied mock
-    chunks.
+    The real handler yields ``StreamEvent`` objects, so the mock client must do the
+    same. ``chunks`` is a list of ``MockChunk`` objects (containing ``text`` and
+    optional ``usage_metadata``). For each chunk we emit a ``CONTENT`` event if the
+    ``text`` attribute is present, and a ``USAGE`` event if ``usage_metadata``
+    exists.
     """
 
     async def mock_stream():
@@ -72,10 +68,11 @@ async def test_google_handler_stream_chat_success():
     ):
         handler = GoogleHandler(api_key="dummy-key")
         result = []
-        async for chunk in handler.stream_chat(
+        async for ev in handler.stream_chat(
             model="gemini-1.5-flash", messages=[{"role": "user", "content": "hi"}]
         ):
-            result.append(chunk)
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
 
     assert result == ["Hello", ",", "world"]
 
@@ -102,12 +99,15 @@ async def test_google_handler_stream_chat_with_async_usage_callback():
     ):
         handler = GoogleHandler(api_key="dummy-key")
         result = []
-        async for chunk in handler.stream_chat(
+        async_usage_data = []
+        async for ev in handler.stream_chat(
             model="gemini-1.5-flash",
             messages=[{"role": "user", "content": "hi"}],
-            on_usage_complete=async_callback,
         ):
-            result.append(chunk)
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+            if ev.type == StreamEventType.USAGE:
+                async_usage_data.append(ev.data)
 
     assert result == ["Hello", "world"]
     assert async_usage_data == [
@@ -115,8 +115,8 @@ async def test_google_handler_stream_chat_with_async_usage_callback():
             "prompt_tokens": 5,
             "completion_tokens": 10,
             "total_tokens": 15,
-            "time_to_first_token_ms": GreaterThanZero(),
-            "tokens_per_second": GreaterThanZero(),
+            "time_to_first_token_ms": IS_POSITIVE,
+            "tokens_per_second": IS_POSITIVE,
         }
     ]
 
@@ -139,32 +139,30 @@ async def test_google_handler_stream_chat_with_sync_usage_callback():
     ):
         handler = GoogleHandler(api_key="dummy-key")
         result = []
-        async for chunk in handler.stream_chat(
+        async_usage_data = []
+        async for ev in handler.stream_chat(
             model="gemini-1.5-flash",
             messages=[{"role": "user", "content": "hi"}],
-            on_usage_complete=sync_callback,
         ):
-            result.append(chunk)
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+            if ev.type == StreamEventType.USAGE:
+                async_usage_data.append(ev.data)
 
     assert result == ["Test"]
-    assert sync_usage_data == [
+    assert async_usage_data == [
         {
             "prompt_tokens": 2,
             "completion_tokens": 3,
             "total_tokens": 5,
-            "time_to_first_token_ms": GreaterThanZero(),
-            "tokens_per_second": GreaterThanZero(),
+            "time_to_first_token_ms": IS_POSITIVE,
+            "tokens_per_second": IS_POSITIVE,
         }
     ]
 
 
-def test_google_handler_missing_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ensure a missing ``GOOGLE_API_KEY`` raises ``ValueError``.
-
-    The handler should read the key from ``settings.GOOGLE_API_KEY`` when no
-    explicit key is provided.  By monkey‑patching the setting to ``None`` we
-    simulate the missing‑key scenario.
-    """
-    monkeypatch.setattr(settings, "GOOGLE_API_KEY", None, raising=False)
-    with pytest.raises(ValueError, match="Could not find Google API key."):
-        GoogleHandler()
+def test_google_handler_missing_api_key():
+    with patch("app.services.llm.google_handler.settings") as mock_settings:
+        mock_settings.GOOGLE_API_KEY = None
+        with pytest.raises(ValueError, match="Could not find Google API key."):
+            GoogleHandler(api_key=None)

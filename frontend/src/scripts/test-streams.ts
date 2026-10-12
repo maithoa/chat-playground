@@ -7,7 +7,6 @@ async function main() {
     await streamChat({
       provider: "google",
       model: "gemini-3.5-flash",
-      temperature: 0.7,
       messages: [{ role: "user", content: "Xin chào, bạn là ai?" }],
       // Use console.log instead of process.stdout to avoid Node typings issue in frontend TS
       outChunk: (chunk) => console.log(chunk),

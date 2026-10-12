@@ -1,12 +1,12 @@
-import type { StreamChatParams } from "../types/chat";
-import { env } from "../config/env";
+import type { StreamChatParams } from "@/types/chat";
+import { env } from "@/config/env";
 
 export async function streamChat({
   provider,
   model,
   messages,
-  temperature = 0.7,
   outChunk,
+  onUsageComplete,
   signal,
 }: StreamChatParams): Promise<void> {
   /**
@@ -18,7 +18,7 @@ export async function streamChat({
   const response = await fetch(chatEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider, model, messages, temperature }),
+    body: JSON.stringify({ provider, model, messages }),
     signal,
   });
 
@@ -56,7 +56,8 @@ export async function streamChat({
 
       // end signal from backend
       if (dataStr === "[DONE]") return;
-
+      console.log("-----DEBUG---- dataStr:", { dataStr });
+      // Parse Server Stream payload
       try {
         const parsed = JSON.parse(dataStr);
         if (parsed.error) {
@@ -64,6 +65,10 @@ export async function streamChat({
         }
         if (parsed.content) {
           outChunk(parsed.content);
+        }
+        if (parsed.usage) {
+          console.log("-----DEBUG---- parsed usage:", parsed.usage);
+          onUsageComplete(parsed.usage);
         }
       } catch (e) {
         console.error("Failed to parse SSE payload:", dataStr, e);
