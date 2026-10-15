@@ -25,13 +25,14 @@ class GroqHandler(BaseLLMHandler):
     ) -> AsyncGenerator[StreamEvent, None]:
 
         start_time = time.perf_counter()
-        response = await self.client.chat.completions.create(
-            model=model, messages=messages, stream=True, **kwargs
-        )
-
+        time_to_first_chunk = 0.0
         last_chunk = None
         first_chunk = True
         try:
+            response = await self.client.chat.completions.create(
+                model=model, messages=messages, stream=True, **kwargs
+            )
+
             async for last_chunk in response:
                 content = last_chunk.choices[0].delta.content
                 if content:
