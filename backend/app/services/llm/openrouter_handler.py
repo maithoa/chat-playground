@@ -33,16 +33,15 @@ class OpenRouterHandler(BaseLLMHandler):
     ) -> AsyncGenerator[StreamEvent, None]:
 
         start_time = time.perf_counter()
-
-        response = await self.client.chat.completions.create(
-            model=model, messages=messages, stream=True, **kwargs
-        )
-
         last_chunk = None
         first_chunk = True
-        time_to_first_token = 0
+        time_to_first_token = 0.0
 
         try:
+            response = await self.client.chat.completions.create(
+                model=model, messages=messages, stream=True, **kwargs
+            )
+
             async for last_chunk in response:
                 content = last_chunk.choices[0].delta.content
                 if content:
