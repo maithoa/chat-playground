@@ -83,14 +83,15 @@ class GoogleHandler(BaseLLMHandler):
         )
 
         start_time = time.perf_counter()
-        time_to_first_chunk = 0
+        time_to_first_chunk = 0.0
 
-        response = await self.client.aio.models.generate_content_stream(
-            model=model, contents=contents, config=config, **kwargs
-        )
         last_chunk = None
         first_chunk = True
         try:
+            response = await self.client.aio.models.generate_content_stream(
+                model=model, contents=contents, config=config, **kwargs
+            )
+
             async for last_chunk in response:
                 if last_chunk.text:
                     if first_chunk:
