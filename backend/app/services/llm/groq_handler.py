@@ -46,7 +46,7 @@ class GroqHandler(BaseLLMHandler):
                     yield StreamEvent(type=StreamEventType.CONTENT, data=content)
 
         except Exception as ex:
-            logger.error(f"{ex}")
+            logger.error(f"Error occurred while streaming chat content from Groq: {ex}")
             yield StreamEvent(type=StreamEventType.ERROR, data=ex)
 
         finally:

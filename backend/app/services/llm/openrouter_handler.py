@@ -51,6 +51,13 @@ class OpenRouterHandler(BaseLLMHandler):
                         logger.info(f"\n Time to first chunk: {time_to_first_token}")
 
                     yield StreamEvent(type=StreamEventType.CONTENT, data=content)
+
+        except Exception as ex:
+            logger.error(
+                f"Error occurred while generating stream content from Google API: {ex}"
+            )
+            yield StreamEvent(type=StreamEventType.ERROR, data=ex)
+
         finally:
 
             if last_chunk and last_chunk.usage:

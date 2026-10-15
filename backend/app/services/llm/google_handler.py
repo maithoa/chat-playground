@@ -103,6 +103,12 @@ class GoogleHandler(BaseLLMHandler):
                     yield StreamEvent(
                         type=StreamEventType.CONTENT, data=last_chunk.text
                     )
+        except Exception as ex:
+            logger.error(
+                f"Error occurred while generating stream content from Google API: {ex}"
+            )
+            yield StreamEvent(type=StreamEventType.ERROR, data=ex)
+
         finally:
             if last_chunk and getattr(last_chunk, "usage_metadata", None):
                 duration_seconds = time.perf_counter() - start_time
