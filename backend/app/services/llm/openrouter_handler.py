@@ -54,7 +54,7 @@ class OpenRouterHandler(BaseLLMHandler):
 
         except Exception as ex:
             logger.error(
-                f"Error occurred while generating stream content from Google API: {ex}"
+                f"Error occurred while generating stream content from OpenRouter API: {ex}"
             )
             yield StreamEvent(type=StreamEventType.ERROR, data=ex)
 

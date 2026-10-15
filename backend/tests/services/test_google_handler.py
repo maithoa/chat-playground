@@ -166,3 +166,33 @@ def test_google_handler_missing_api_key():
         mock_settings.GOOGLE_API_KEY = None
         with pytest.raises(ValueError, match="Could not find Google API key."):
             GoogleHandler(api_key=None)
+
+
+@pytest.mark.asyncio
+async def test_google_handler_stream_chat_provider_error():
+    """
+    Verify that when Google API raises an exception during streaming,
+    the handler catches it and yields a StreamEventType.ERROR event.
+    """
+    mock_client = AsyncMock()
+
+    # Mock the error when calling API
+    mock_client.aio.models.generate_content_stream.side_effect = Exception(
+        "Google API connection timeout."
+    )
+
+    with patch(
+        "app.services.llm.google_handler.genai.Client", return_value=mock_client
+    ):
+        handler = GoogleHandler(api_key="dummy-key")
+        events = []
+
+        async for ev in handler.stream_chat(
+            model="gemini-1.5-flash",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            events.append(ev)
+
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert "Google API connection timeout." in str(events[0].data)

@@ -129,3 +129,30 @@ def test_groq_handler_missing_api_key():
 
         with pytest.raises(ValueError, match="Could not find Groq API key."):
             GroqHandler(api_key=None)
+
+
+@pytest.mark.asyncio
+async def test_groq_handler_stream_chat_provider_error():
+    """
+    Verify that Groq API raises an exeption during chat completions,
+    the handler catches it and yields a StreamEventType.ERROR event.
+    """
+    mock_client = AsyncMock()
+
+    # Mock the error when calling API.
+    mock_client.chat.completions.create.side_effect = Exception(
+        "Groq API connection timeout."
+    )
+
+    with patch("app.services.llm.groq_handler.AsyncGroq", return_value=mock_client):
+        handler = GroqHandler(api_key="dummy-key")
+        events = []
+
+        async for ev in handler.stream_chat(
+            model="groq/gemma-2",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            events.append(ev)
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert "Groq API connection timeout." in str(events[0].data)

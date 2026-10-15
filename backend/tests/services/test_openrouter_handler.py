@@ -128,3 +128,32 @@ def test_openrouter_handler_missing_api_key():
         mock_settings.OPENROUTER_API_KEY = None
         with pytest.raises(ValueError, match="Could not find OpenRouter API key."):
             OpenRouterHandler(api_key=None)
+
+
+@pytest.mark.asyncio
+async def test_openrouter_handler_stream_chat_provider_error():
+    """
+    Verify that OpenRouter API raises an error during chat completions,
+    the handler catches it and yields a StreamEventType.ERROR event.
+    """
+
+    mock_client = AsyncMock()
+    # Mock the error when calling API.
+    mock_client.chat.completions.create.side_effect = Exception(
+        "OpenRouter API connection timeout."
+    )
+
+    with patch(
+        "app.services.llm.openrouter_handler.AsyncOpenAI", return_value=mock_client
+    ):
+        handler = OpenRouterHandler(api_key="dummy-key")
+        events = []
+
+        async for ev in handler.stream_chat(
+            model="openrouter/free",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            events.append(ev)
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert "OpenRouter API connection timeout." in str(events[0].data)
