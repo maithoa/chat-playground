@@ -65,7 +65,7 @@ jobs:
       - name: Start Preview Server & Health Check
         working-directory: frontend
         run: |
-          npx vite preview --port 5173 --host &
+          npx vite preview --port 5173 --host 127.0.0.1 &
           npx wait-on http://127.0.0.1:5173 --timeout 30000
 
       - name: Run Playwright E2E Tests
