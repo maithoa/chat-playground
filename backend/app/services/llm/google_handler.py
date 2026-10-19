@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.models.conversation import MessageRole, MessageBase
 from .base import BaseLLMHandler
 from app.schemas.llm import StreamEvent, StreamEventType
+from httpx import TimeoutException
 
 
 class GoogleHandler(BaseLLMHandler):
@@ -103,11 +104,17 @@ class GoogleHandler(BaseLLMHandler):
                     yield StreamEvent(
                         type=StreamEventType.CONTENT, data=last_chunk.text
                     )
+        except TimeoutException as e:
+            safe_error_message = "Timeout trying to access Google API."
+            logger.error(f"{safe_error_message} {str(e)}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
+
         except Exception as ex:
-            logger.error(
-                f"Error occurred while generating stream content from Google API: {ex}"
+            safe_error_message = (
+                "Error occurred while streaming chat content from Google API."
             )
-            yield StreamEvent(type=StreamEventType.ERROR, data=ex)
+            logger.error(f"{safe_error_message} {str(ex)}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
 
         finally:
             if last_chunk and getattr(last_chunk, "usage_metadata", None):

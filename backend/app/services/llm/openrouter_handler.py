@@ -5,6 +5,7 @@ from typing import AsyncGenerator, List, Dict, Any, Optional, Callable
 from openai import AsyncOpenAI
 from openai.types.completion_usage import CompletionUsage
 from app.schemas.llm import StreamEventType, StreamEvent
+from httpx import TimeoutException
 
 from app.core.config import settings
 from .base import BaseLLMHandler
@@ -52,11 +53,17 @@ class OpenRouterHandler(BaseLLMHandler):
 
                     yield StreamEvent(type=StreamEventType.CONTENT, data=content)
 
+        except TimeoutException as e:
+            safe_error_message = "Timeout trying to access OpenRouter API."
+            logger.error(f"{safe_error_message} {str(e)}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
+
         except Exception as ex:
-            logger.error(
-                f"Error occurred while generating stream content from OpenRouter API: {ex}"
+            safe_error_message = (
+                "Error occurred while streaming chat content from OpenRouter."
             )
-            yield StreamEvent(type=StreamEventType.ERROR, data=ex)
+            logger.error(f"{safe_error_message} {str(ex)}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
 
         finally:
 

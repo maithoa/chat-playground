@@ -4,6 +4,7 @@ from app.services.llm.openrouter_handler import OpenRouterHandler
 from app.schemas.llm import StreamEvent, StreamEventType
 from openai.types.completion_usage import CompletionUsage
 from tests.utils import IS_POSITIVE
+from httpx import TimeoutException
 
 
 # Helper class to mock a chunk returned from the OpenRouter API, optionally with usage data
@@ -156,4 +157,36 @@ async def test_openrouter_handler_stream_chat_provider_error():
             events.append(ev)
     assert len(events) == 1
     assert events[0].type == StreamEventType.ERROR
-    assert "OpenRouter API connection timeout." in str(events[0].data)
+    assert "Error occurred while streaming chat content from OpenRouter." in str(
+        events[0].data
+    )
+
+
+@pytest.mark.asyncio
+async def test_openrouter_handler_stream_chat_timeout_error():
+    """
+    Verify that when API times out (raising httpx.TimeoutException),
+    the handler catches it and yields a safe error event.
+    """
+    mock_client = AsyncMock()
+
+    # Mock return of TimeOutException
+    mock_client.chat.completions.create.side_effect = TimeoutException(
+        "Request timed out connecting to API."
+    )
+
+    with patch(
+        "app.services.llm.openrouter_handler.AsyncOpenAI", return_value=mock_client
+    ):
+        handler = OpenRouterHandler(api_key="dummy-key")
+        events = []
+
+        async for ev in handler.stream_chat(
+            model="openrouter/free",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            events.append(ev)
+
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert "timeout" in str(events[0].data).lower()

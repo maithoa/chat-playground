@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 from app.services.llm.google_handler import GoogleHandler
 from app.schemas.llm import StreamEvent, StreamEventType
 from tests.utils import IS_POSITIVE
+import httpx
 
 
 class MockUsageMetadata:
@@ -195,4 +196,36 @@ async def test_google_handler_stream_chat_provider_error():
 
     assert len(events) == 1
     assert events[0].type == StreamEventType.ERROR
-    assert "Google API connection timeout." in str(events[0].data)
+    assert "Error occurred while streaming chat content from Google API." in str(
+        events[0].data
+    )
+
+
+@pytest.mark.asyncio
+async def test_google_handler_stream_chat_timeout_error():
+    """
+    Verify that when Groq/Google API times out (raising httpx.TimeoutException),
+    the handler catches it and yields a safe error event.
+    """
+    mock_client = AsyncMock()
+
+    # Mock return of TimeOutException
+    mock_client.aio.models.generate_content_stream.side_effect = httpx.TimeoutException(
+        "Request timed out connecting to Groq API."
+    )
+
+    with patch(
+        "app.services.llm.google_handler.genai.Client", return_value=mock_client
+    ):
+        handler = GoogleHandler(api_key="dummy-key")
+        events = []
+
+        async for ev in handler.stream_chat(
+            model="gemini-1.5-flash",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            events.append(ev)
+
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert "timeout" in str(events[0].data).lower()

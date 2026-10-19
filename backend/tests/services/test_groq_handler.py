@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.llm.groq_handler import GroqHandler
 from app.schemas.llm import StreamEvent, StreamEventType
 from tests.utils import IS_POSITIVE
+from httpx import TimeoutException
 
 
 class MockChunk:
@@ -155,4 +156,34 @@ async def test_groq_handler_stream_chat_provider_error():
             events.append(ev)
     assert len(events) == 1
     assert events[0].type == StreamEventType.ERROR
-    assert "Groq API connection timeout." in str(events[0].data)
+    assert "Error occurred while streaming chat content from Groq." in str(
+        events[0].data
+    )
+
+
+@pytest.mark.asyncio
+async def test_groq_handler_stream_chat_timeout_error():
+    """
+    Verify that when API times out (raising httpx.TimeoutException),
+    the handler catches it and yields a safe error event.
+    """
+    mock_client = AsyncMock()
+
+    # Mock return of TimeOutException
+    mock_client.chat.completions.create.side_effect = TimeoutException(
+        "Request timed out connecting to API."
+    )
+
+    with patch("app.services.llm.groq_handler.AsyncGroq", return_value=mock_client):
+        handler = GroqHandler(api_key="dummy-key")
+        events = []
+
+        async for ev in handler.stream_chat(
+            model="groq/gemma-2",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            events.append(ev)
+
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert "timeout" in str(events[0].data).lower()

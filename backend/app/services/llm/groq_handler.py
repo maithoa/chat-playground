@@ -3,6 +3,7 @@ import time
 from loguru import logger
 from typing import AsyncGenerator, List, Dict, Any, Callable, Optional
 from groq import AsyncGroq
+from httpx import TimeoutException
 
 from app.core.config import settings
 from .base import BaseLLMHandler
@@ -44,10 +45,17 @@ class GroqHandler(BaseLLMHandler):
                         )
 
                     yield StreamEvent(type=StreamEventType.CONTENT, data=content)
+        except TimeoutException as e:
+            safe_error_message = "Timeout trying to access Groq API."
+            logger.error(f"{safe_error_message} {str(e)}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
 
         except Exception as ex:
-            logger.error(f"Error occurred while streaming chat content from Groq: {ex}")
-            yield StreamEvent(type=StreamEventType.ERROR, data=ex)
+            safe_error_message = (
+                "Error occurred while streaming chat content from Groq."
+            )
+            logger.error(f"{safe_error_message} {str(ex)}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
 
         finally:
             duration_seconds = time.perf_counter() - start_time
