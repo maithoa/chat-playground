@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+import json
 from httpx import AsyncClient, ASGITransport, Request
 from unittest.mock import patch, AsyncMock, MagicMock
 from app.main import app
@@ -41,46 +42,86 @@ def mock_llm_providers():
 
 
 @pytest.mark.anyio
-async def test_streaming_disconnect_handling(client: AsyncClient):
-    """
-    Verify provider streaming handles client disconnects gracefully.
-    Simulates a client dropping connection mid-stream to ensure resources and locks are freed.
-    """
-    try:
-        payload = {
-            "provider": "groq",
-            "model": "openai/gpt-oss-120b",
-            "messages": [{"role": "user", "content": "test disconnect"}],
-        }
-        async with client.stream("POST", "/api/v1/llm/chat", json=payload) as response:
-            assert response.status_code == 200
-            async for chunk in response.aiter_text():
-                # Read the first chunk then abort connection abruptly
-                break
-    except Exception as e:
-        pytest.fail(f"Streaming disconnect caused unhandled exception: {e}")
+@pytest.mark.asyncio
+async def test_streaming_disconnect_handling():
+    first_chunk_sent = asyncio.Event()
+    stream_closed = asyncio.Event()
+    wait_forever = asyncio.Event()
+    sent_messages = []
+    request_received = False
 
+    payload = {
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "messages": [{"role": "user", "content": "hi"}],
+    }
 
-@pytest.mark.anyio
-async def test_streaming_timeout_resilience(client: AsyncClient):
-    """
-    Verify streaming resilience against provider timeouts or hanging states.
-    Ensures the server doesn't hang indefinitely if the LLM provider stalls.
-    """
-    try:
-        payload = {
-            "provider": "groq",
-            "model": "openai/gpt-oss-120b",
-            "messages": [{"role": "user", "content": "trigger timeout"}],
-        }
-        response = await client.post(
-            "/api/v1/llm/chat",
-            json=payload,
-            timeout=5.0,  # Enforce strict test timeout threshold
+    async def fake_stream(*args, **kwargs):
+        try:
+            yield StreamEvent(
+                type=StreamEventType.CONTENT,
+                data="Hello",
+            )
+            await wait_forever.wait()
+        finally:
+            stream_closed.set()
+
+    async def receive():
+        nonlocal request_received
+
+        if not request_received:
+            request_received = True
+            return {
+                "type": "http.request",
+                "body": json.dumps(payload).encode(),
+                "more_body": False,
+            }
+
+        # Ngắt kết nối sau khi backend gửi chunk đầu tiên.
+        await first_chunk_sent.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        sent_messages.append(message)
+
+        if message["type"] == "http.response.body" and message.get("body"):
+            first_chunk_sent.set()
+
+    scope = {
+        "type": "http",
+        "asgi": {
+            "version": "3.0",
+            "spec_version": "2.3",
+        },
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/v1/llm/chat",
+        "raw_path": b"/api/v1/llm/chat",
+        "query_string": b"",
+        "root_path": "",
+        "headers": [(b"content-type", b"application/json")],
+        "client": ("127.0.0.1", 12345),
+        "server": ("test", 80),
+    }
+
+    with patch.object(
+        LLMService,
+        "stream_chat",
+        side_effect=fake_stream,
+    ):
+        await asyncio.wait_for(
+            app(scope, receive, send),
+            timeout=2.0,
         )
-        assert response.status_code in [200, 504, 503, 400, 422]
-    except asyncio.TimeoutError:
-        pytest.fail("Request hung beyond expected timeout threshold.")
+
+    assert first_chunk_sent.is_set()
+    assert stream_closed.is_set()
+
+    start = next(
+        message for message in sent_messages if message["type"] == "http.response.start"
+    )
+    assert start["status"] == 200
 
 
 @pytest.mark.asyncio

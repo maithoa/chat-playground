@@ -73,7 +73,7 @@ async def chat_stream(request: ChatRequest):
                 yield streamEvent.to_sse_data()
 
         except Exception as e:
-            logger.error("Internal LLM Streaming Service error occurred: %s", str(e))
+            logger.exception(f"Internal LLM streaming service error: {str(e)}")
             safe_error_message = "An unexpected error occurred while processing your request. Please try again later."
             error_event = StreamEvent(
                 type=StreamEventType.ERROR, data=safe_error_message
