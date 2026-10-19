@@ -27,7 +27,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run Backend Pytest suite
-        working-directory: backend
+        working-directory: backendnp
         env:
           # Set environtment variables for app to run
           PORT: 8686
@@ -52,6 +52,8 @@ jobs:
         working-directory: frontend
         run: |
           npm ci
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
 
       - name: Run Frontend Tests
         working-directory: frontend
