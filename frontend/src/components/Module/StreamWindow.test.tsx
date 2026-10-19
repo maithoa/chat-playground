@@ -99,7 +99,7 @@ describe("StreamWindow component", () => {
     expect(assistantContainer).toHaveClass("bg-gray-100", "text-gray-800");
   });
   it("shows the thinking placeholder for assistant messages without content", () => {
-    const msgs: Message[] = [makeMessage("assistant", null)];
+    const msgs: Message[] = [makeMessage("assistant", "")];
 
     render(<StreamWindow messages={msgs} isGenerating={false} onStop={() => {}} />);
 

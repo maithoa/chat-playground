@@ -2,7 +2,8 @@ import inspect
 import time
 from loguru import logger
 from typing import AsyncGenerator, List, Dict, Any, Callable, Optional
-from groq import AsyncGroq
+from groq import AsyncGroq, APITimeoutError
+from httpx import TimeoutException
 
 from app.core.config import settings
 from .base import BaseLLMHandler
@@ -25,13 +26,18 @@ class GroqHandler(BaseLLMHandler):
     ) -> AsyncGenerator[StreamEvent, None]:
 
         start_time = time.perf_counter()
-        response = await self.client.chat.completions.create(
-            model=model, messages=messages, stream=True, **kwargs
-        )
+        time_to_first_chunk = 0.0
+        duration_seconds = 0.0
 
         last_chunk = None
         first_chunk = True
+
+        response = None
         try:
+            response = await self.client.chat.completions.create(
+                model=model, messages=messages, stream=True, **kwargs
+            )
+
             async for last_chunk in response:
                 content = last_chunk.choices[0].delta.content
                 if content:
@@ -43,43 +49,55 @@ class GroqHandler(BaseLLMHandler):
                         )
 
                     yield StreamEvent(type=StreamEventType.CONTENT, data=content)
+        except (APITimeoutError, TimeoutException) as e:
+            safe_error_message = "Timeout trying to access Groq API."
+            logger.error(f"{safe_error_message} {str(e)}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
+            return
 
         except Exception as ex:
-            logger.error(f"{ex}")
-            yield StreamEvent(type=StreamEventType.ERROR, data=ex)
+            safe_error_message = (
+                "Error occurred while streaming chat content from Groq."
+            )
+            logger.error(f"{safe_error_message} {str(ex)}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
+            return
 
         finally:
-            duration_seconds = time.perf_counter() - start_time
+            if response is not None:
+                logger.info(f"Groq Response type: {type(response)}")
+                await response.close()
 
-            if start_time:
-                logger.info(f"\nTime taken: {duration_seconds} seconds")
+        duration_seconds = time.perf_counter() - start_time
+        if start_time:
+            logger.info(f"\nTime taken: {duration_seconds} seconds")
 
-            if last_chunk and last_chunk.usage:
-                logger.info(f"\nUsage Info object from Groq {last_chunk.usage}")
-                completion_time_api = 0
+        if last_chunk and last_chunk.usage:
+            logger.info(f"\nUsage Info object from Groq {last_chunk.usage}")
+            completion_time_api = 0
 
-                if (
-                    last_chunk.usage.completion_time
-                    and last_chunk.usage.completion_time > 0
-                ):
-                    completion_time_api = last_chunk.usage.completion_time
-                elif last_chunk.usage.total_time and last_chunk.usage.total_time > 0:
-                    completion_time_api = last_chunk.usage.total_time
-                # Tokens Per Second is calculated based on completion_tokens and completion_time.
-                tokens_per_second = (
-                    (last_chunk.usage.completion_tokens / completion_time_api)
-                    if completion_time_api and completion_time_api > 0
-                    else 0
-                )
-                usage_data = {
-                    "prompt_tokens": last_chunk.usage.prompt_tokens,
-                    "completion_tokens": last_chunk.usage.completion_tokens,
-                    "total_tokens": last_chunk.usage.total_tokens,
-                    "time_to_first_token_ms": round(time_to_first_chunk * 1000, 2),
-                    "tokens_per_second": round(tokens_per_second, 2),
-                }
+            if (
+                last_chunk.usage.completion_time
+                and last_chunk.usage.completion_time > 0
+            ):
+                completion_time_api = last_chunk.usage.completion_time
+            elif last_chunk.usage.total_time and last_chunk.usage.total_time > 0:
+                completion_time_api = last_chunk.usage.total_time
+            # Tokens Per Second is calculated based on completion_tokens and completion_time.
+            tokens_per_second = (
+                (last_chunk.usage.completion_tokens / completion_time_api)
+                if completion_time_api and completion_time_api > 0
+                else 0
+            )
+            usage_data = {
+                "prompt_tokens": last_chunk.usage.prompt_tokens,
+                "completion_tokens": last_chunk.usage.completion_tokens,
+                "total_tokens": last_chunk.usage.total_tokens,
+                "time_to_first_token_ms": round(time_to_first_chunk * 1000, 2),
+                "tokens_per_second": round(tokens_per_second, 2),
+            }
 
-                se = StreamEvent(type=StreamEventType.USAGE, data=usage_data)
-                logger.info(f"\n Usage data in Handler: {se.data} ")
+            se = StreamEvent(type=StreamEventType.USAGE, data=usage_data)
+            logger.info(f"\n Usage data in Handler: {se.data} ")
 
-                yield se
+            yield se

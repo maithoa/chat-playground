@@ -1,8 +1,9 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.llm.google_handler import GoogleHandler
 from app.schemas.llm import StreamEvent, StreamEventType
 from tests.utils import IS_POSITIVE
+import httpx
 
 
 class MockUsageMetadata:
@@ -33,21 +34,20 @@ class MockChunk:
 
 
 def _mock_client(chunks):
-    """Create an ``AsyncMock`` client that yields ``StreamEvent`` objects.
-
-    The real handler yields ``StreamEvent`` objects, so the mock client must do the
-    same. ``chunks`` is a list of ``MockChunk`` objects (containing ``text`` and
-    optional ``usage_metadata``). For each chunk we emit a ``CONTENT`` event if the
-    ``text`` attribute is present, and a ``USAGE`` event if ``usage_metadata``
-    exists.
-    """
+    """Create a mock Google client returning an async stream of MockChunk."""
 
     async def mock_stream():
         for c in chunks:
             yield c
 
+    generator = mock_stream()
+
+    response = MagicMock()
+    response.__aiter__.side_effect = lambda: generator
+    response.aclose = AsyncMock(side_effect=generator.aclose)
+
     client = AsyncMock()
-    client.aio.models.generate_content_stream = AsyncMock(return_value=mock_stream())
+    client.aio.models.generate_content_stream = AsyncMock(return_value=response)
     return client
 
 
@@ -75,6 +75,9 @@ async def test_google_handler_stream_chat_success():
                 result.append(ev.data)
 
     assert result == ["Hello", ",", "world"]
+
+    response = mock_client.aio.models.generate_content_stream.return_value
+    response.aclose.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -119,6 +122,8 @@ async def test_google_handler_stream_chat_with_async_usage_callback():
             "tokens_per_second": IS_POSITIVE,
         }
     ]
+    response = mock_client.aio.models.generate_content_stream.return_value
+    response.aclose.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -159,6 +164,8 @@ async def test_google_handler_stream_chat_with_sync_usage_callback():
             "tokens_per_second": IS_POSITIVE,
         }
     ]
+    response = mock_client.aio.models.generate_content_stream.return_value
+    response.aclose.assert_awaited_once()
 
 
 def test_google_handler_missing_api_key():
@@ -166,3 +173,138 @@ def test_google_handler_missing_api_key():
         mock_settings.GOOGLE_API_KEY = None
         with pytest.raises(ValueError, match="Could not find Google API key."):
             GoogleHandler(api_key=None)
+
+
+@pytest.mark.asyncio
+async def test_google_handler_stream_chat_provider_error():
+    """
+    Verify that when Google API raises an exception during streaming,
+    the handler catches it and yields a StreamEventType.ERROR event.
+    """
+    mock_client = AsyncMock()
+
+    # Mock the error when calling API
+    mock_client.aio.models.generate_content_stream.side_effect = Exception(
+        "Google API connection timeout."
+    )
+
+    with patch(
+        "app.services.llm.google_handler.genai.Client", return_value=mock_client
+    ):
+        handler = GoogleHandler(api_key="dummy-key")
+        events = []
+
+        async for ev in handler.stream_chat(
+            model="gemini-1.5-flash",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            events.append(ev)
+
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert "Error occurred while streaming chat content from Google API." in str(
+        events[0].data
+    )
+
+
+@pytest.mark.asyncio
+async def test_google_handler_stream_chat_timeout_error():
+    """
+    Verify that when Groq/Google API times out (raising httpx.TimeoutException),
+    the handler catches it and yields a safe error event.
+    """
+    mock_client = AsyncMock()
+
+    # Mock return of TimeOutException
+    mock_client.aio.models.generate_content_stream.side_effect = httpx.TimeoutException(
+        "Request timed out connecting to Groq API."
+    )
+
+    with patch(
+        "app.services.llm.google_handler.genai.Client", return_value=mock_client
+    ):
+        handler = GoogleHandler(api_key="dummy-key")
+        events = []
+
+        async for ev in handler.stream_chat(
+            model="gemini-1.5-flash",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            events.append(ev)
+
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert "timeout" in str(events[0].data).lower()
+
+
+@pytest.mark.asyncio
+async def test_google_handler_closes_stream_on_midstream_error():
+    async def failing_stream():
+        yield MockChunk("Hello")
+        raise RuntimeError("Sensitive internal provider error")
+
+    generator = failing_stream()
+
+    response = MagicMock()
+    response.__aiter__.side_effect = lambda: generator
+    response.aclose = AsyncMock(side_effect=generator.aclose)
+
+    mock_client = AsyncMock()
+    mock_client.aio.models.generate_content_stream.return_value = response
+
+    with patch(
+        "app.services.llm.google_handler.genai.Client",
+        return_value=mock_client,
+    ):
+        handler = GoogleHandler(api_key="dummy-key")
+        events = [
+            event
+            async for event in handler.stream_chat(
+                model="groq/gemma-2",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+        ]
+
+    # Content and error is received, no usage
+    assert [event.type for event in events] == [
+        StreamEventType.CONTENT,
+        StreamEventType.ERROR,
+    ]
+    assert events[0].data == "Hello"
+    assert events[1].data == (
+        "Error occurred while streaming chat content from Google API."
+    )
+
+    # No sensitive info frome exception is raised
+    assert "Sensitive internal provider error" not in str(events)
+
+    # Stream is closed.
+    response.aclose.assert_awaited_once()
+
+
+async def test_google_handler_stream_chat_empty_chunks():
+    """Verify that ``GoogleHandler.stream_chat`` yields the expected content.
+
+    The test injects a mock ``genai.Client`` that returns a small series of
+    chunks.  No usage callback is provided – the handler should simply yield the
+    ``content`` values.
+    """
+
+    chunks = []
+    mock_client = _mock_client(chunks)
+
+    with patch(
+        "app.services.llm.google_handler.genai.Client", return_value=mock_client
+    ):
+        handler = GoogleHandler(api_key="dummy-key")
+        result = []
+        async for ev in handler.stream_chat(
+            model="gemini-1.5-flash", messages=[{"role": "user", "content": "hi"}]
+        ):
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+
+    assert result == []
+
+    response = mock_client.aio.models.generate_content_stream.return_value
+    response.aclose.assert_awaited_once()

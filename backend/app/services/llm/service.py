@@ -8,6 +8,7 @@ from .catalog import PROVIDERS_CATALOG
 from app.schemas.llm import ProviderInfo, ModelInfo
 from loguru import logger
 from app.schemas.llm import StreamEvent, StreamEventType
+import asyncio
 
 
 class LLMService:
@@ -59,12 +60,23 @@ class LLMService:
         # iterate over it directly. Tests mock this method with a ``MagicMock``
         # that returns an async generator, so no special await handling is
         # required.
-        async for streamEvent in handler.stream_chat(
-            model=model,
-            messages=messages,
-            **kwargs,
-        ):
-            if streamEvent.type == StreamEventType.USAGE:
-                cls.on_usage_complete(streamEvent.data)
+        try:
+            async for streamEvent in handler.stream_chat(
+                model=model,
+                messages=messages,
+                **kwargs,
+            ):
+                if streamEvent.type == StreamEventType.USAGE:
+                    cls.on_usage_complete(streamEvent.data)
 
-            yield streamEvent
+                yield streamEvent
+        except asyncio.CancelledError:
+            logger.warning("Stream cancelled by client disconnect.")
+            raise
+
+        except Exception as ex:
+            logger.error(f"Unhandled error during streaming: {ex}")
+            yield StreamEvent(
+                type=StreamEventType.ERROR,
+                data="An error occurred while streaming response.",
+            )

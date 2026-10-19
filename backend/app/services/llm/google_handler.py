@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.models.conversation import MessageRole, MessageBase
 from .base import BaseLLMHandler
 from app.schemas.llm import StreamEvent, StreamEventType
+from httpx import TimeoutException
 
 
 class GoogleHandler(BaseLLMHandler):
@@ -83,14 +84,18 @@ class GoogleHandler(BaseLLMHandler):
         )
 
         start_time = time.perf_counter()
-        time_to_first_chunk = 0
+        time_to_first_chunk = 0.0
+        duration_seconds = 0.0
 
-        response = await self.client.aio.models.generate_content_stream(
-            model=model, contents=contents, config=config, **kwargs
-        )
         last_chunk = None
         first_chunk = True
+
+        response = None
         try:
+            response = await self.client.aio.models.generate_content_stream(
+                model=model, contents=contents, config=config, **kwargs
+            )
+
             async for last_chunk in response:
                 if last_chunk.text:
                     if first_chunk:
@@ -102,23 +107,37 @@ class GoogleHandler(BaseLLMHandler):
                     yield StreamEvent(
                         type=StreamEventType.CONTENT, data=last_chunk.text
                     )
+        except TimeoutException as e:
+            safe_error_message = "Timeout trying to access Google API."
+            logger.error(f"{safe_error_message} {str(e)}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
+            return
+
+        except Exception as ex:
+            safe_error_message = (
+                "Error occurred while streaming chat content from Google API."
+            )
+            logger.error(f"{safe_error_message} {str(ex)}")
+            yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
+            return
+
         finally:
-            if last_chunk and getattr(last_chunk, "usage_metadata", None):
-                duration_seconds = time.perf_counter() - start_time
-                # For google api, then output tokens is stored in usage_metadata's candidates_token_count
-                completion_tokens = (
-                    last_chunk.usage_metadata.candidates_token_count or 0
-                )
-                tokens_per_second = (
-                    (completion_tokens / duration_seconds)
-                    if duration_seconds > 0
-                    else 0
-                )
-                usage_data = {
-                    "prompt_tokens": last_chunk.usage_metadata.prompt_token_count,
-                    "completion_tokens": last_chunk.usage_metadata.candidates_token_count,
-                    "total_tokens": last_chunk.usage_metadata.total_token_count,
-                    "time_to_first_token_ms": round(time_to_first_chunk * 1000, 2),
-                    "tokens_per_second": round(tokens_per_second, 2),
-                }
-                yield StreamEvent(type=StreamEventType.USAGE, data=usage_data)
+            if response is not None:
+                logger.info(f"Google Response type: {type(response)}")
+                await response.aclose()
+
+        if last_chunk and getattr(last_chunk, "usage_metadata", None):
+            duration_seconds = time.perf_counter() - start_time
+            # For google api, then output tokens is stored in usage_metadata's candidates_token_count
+            completion_tokens = last_chunk.usage_metadata.candidates_token_count or 0
+            tokens_per_second = (
+                (completion_tokens / duration_seconds) if duration_seconds > 0 else 0
+            )
+            usage_data = {
+                "prompt_tokens": last_chunk.usage_metadata.prompt_token_count,
+                "completion_tokens": last_chunk.usage_metadata.candidates_token_count,
+                "total_tokens": last_chunk.usage_metadata.total_token_count,
+                "time_to_first_token_ms": round(time_to_first_chunk * 1000, 2),
+                "tokens_per_second": round(tokens_per_second, 2),
+            }
+            yield StreamEvent(type=StreamEventType.USAGE, data=usage_data)

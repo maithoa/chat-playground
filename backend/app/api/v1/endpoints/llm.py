@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from app.schemas.llm import ProviderInfo, ChatRequest
 from app.services.llm.service import LLMService
 from app.schemas.llm import StreamEventType, StreamEvent
+from loguru import logger
 
 router = APIRouter(prefix="/llm", tags=["LLM Catalog"])
 
@@ -72,7 +73,11 @@ async def chat_stream(request: ChatRequest):
                 yield streamEvent.to_sse_data()
 
         except Exception as e:
-            error_event = StreamEvent(type=StreamEventType.ERROR, data=str(e))
+            logger.exception(f"Internal LLM streaming service error: {str(e)}")
+            safe_error_message = "An unexpected error occurred while processing your request. Please try again later."
+            error_event = StreamEvent(
+                type=StreamEventType.ERROR, data=safe_error_message
+            )
             yield error_event.to_sse_data()
 
     return StreamingResponse(

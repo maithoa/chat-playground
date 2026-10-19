@@ -47,7 +47,7 @@ jobs:
           node-version: 22
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
-
+      # Run front end unit test (vitest)
       - name: Install Frontend Dependencies
         working-directory: frontend
         run: |
@@ -57,3 +57,24 @@ jobs:
         working-directory: frontend
         run: |
           npm run test:ci
+
+      # Run playwright e2e test
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Build Frontend Production
+        working-directory: frontend
+        run: npm run build
+
+      - name: Run Playwright E2E Tests
+        working-directory: ./frontend
+        run: npm run test:e2e
+
+      - name: Upload Playwright Report on Failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+

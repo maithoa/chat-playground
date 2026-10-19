@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.llm.groq_handler import GroqHandler
 from app.schemas.llm import StreamEvent, StreamEventType
 from tests.utils import IS_POSITIVE
+from httpx import TimeoutException
 
 
 class MockChunk:
@@ -19,24 +20,25 @@ class MockChunk:
 
 
 def _mock_client(chunks):
-    """Create an ``AsyncMock`` client that yields ``StreamEvent`` objects.
-
-    ``chunks`` is a list of ``MockChunk`` objects (containing ``content`` and an
-    optional ``usage`` attribute). For each chunk we emit a ``CONTENT`` event if
-    ``content`` is present, and a ``USAGE`` event if ``usage`` exists.
-    """
+    """Create a mock Groq client returning an async stream of MockChunk objects."""
 
     async def mock_stream():
         for c in chunks:
             yield c
 
+    generator = mock_stream()
+
+    response = MagicMock()
+    response.__aiter__.side_effect = lambda: generator
+    response.close = AsyncMock(side_effect=generator.aclose)
+
     client = AsyncMock()
-    client.chat.completions.create = AsyncMock(return_value=mock_stream())
+    client.chat.completions.create.return_value = response
     return client
 
 
 @pytest.mark.asyncio
-async def test_groq_handler_stream_chat_with_async_usage_callback():
+async def test_groq_handler_stream_chat_emits_content_and_usage():
     """Validate async ``on_usage_complete`` receives correct usage data."""
 
     usage = type(
@@ -77,10 +79,12 @@ async def test_groq_handler_stream_chat_with_async_usage_callback():
             "tokens_per_second": 100,
         }
     ]
+    response = mock_client.chat.completions.create.return_value
+    response.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_groq_handler_stream_chat_with_sync_usage_callback():
+async def test_groq_handler_stream_chat_calculates_tokens_per_second():
     """Validate sync ``on_usage_complete`` works as expected."""
 
     usage = type(
@@ -121,6 +125,8 @@ async def test_groq_handler_stream_chat_with_sync_usage_callback():
             "tokens_per_second": 37.5,
         }
     ]
+    response = mock_client.chat.completions.create.return_value
+    response.close.assert_awaited_once()
 
 
 def test_groq_handler_missing_api_key():
@@ -129,3 +135,129 @@ def test_groq_handler_missing_api_key():
 
         with pytest.raises(ValueError, match="Could not find Groq API key."):
             GroqHandler(api_key=None)
+
+
+@pytest.mark.asyncio
+async def test_groq_handler_stream_chat_provider_error():
+    """
+    Verify that Groq API raises an exeption during chat completions,
+    the handler catches it and yields a StreamEventType.ERROR event.
+    """
+    mock_client = AsyncMock()
+
+    # Mock the error when calling API.
+    mock_client.chat.completions.create.side_effect = Exception(
+        "Groq API connection timeout."
+    )
+
+    with patch("app.services.llm.groq_handler.AsyncGroq", return_value=mock_client):
+        handler = GroqHandler(api_key="dummy-key")
+        events = []
+
+        async for ev in handler.stream_chat(
+            model="groq/gemma-2",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            events.append(ev)
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert "Error occurred while streaming chat content from Groq." in str(
+        events[0].data
+    )
+
+
+@pytest.mark.asyncio
+async def test_groq_handler_stream_chat_timeout_error():
+    """
+    Verify that when API times out (raising httpx.TimeoutException),
+    the handler catches it and yields a safe error event.
+    """
+    mock_client = AsyncMock()
+
+    # Mock return of TimeOutException
+    mock_client.chat.completions.create.side_effect = TimeoutException(
+        "Request timed out connecting to API."
+    )
+
+    with patch("app.services.llm.groq_handler.AsyncGroq", return_value=mock_client):
+        handler = GroqHandler(api_key="dummy-key")
+        events = []
+
+        async for ev in handler.stream_chat(
+            model="groq/gemma-2",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            events.append(ev)
+
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert "timeout" in str(events[0].data).lower()
+
+
+@pytest.mark.asyncio
+async def test_groq_handler_closes_stream_on_midstream_error():
+    async def failing_stream():
+        yield MockChunk("Hello")
+        raise RuntimeError("Sensitive internal provider error")
+
+    generator = failing_stream()
+
+    response = MagicMock()
+    response.__aiter__.side_effect = lambda: generator
+    response.close = AsyncMock(side_effect=generator.aclose)
+
+    mock_client = AsyncMock()
+    mock_client.chat.completions.create.return_value = response
+
+    with patch(
+        "app.services.llm.groq_handler.AsyncGroq",
+        return_value=mock_client,
+    ):
+        handler = GroqHandler(api_key="dummy-key")
+        events = [
+            event
+            async for event in handler.stream_chat(
+                model="groq/gemma-2",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+        ]
+
+    # Content and error is received, no usage
+    assert [event.type for event in events] == [
+        StreamEventType.CONTENT,
+        StreamEventType.ERROR,
+    ]
+    assert events[0].data == "Hello"
+    assert events[1].data == ("Error occurred while streaming chat content from Groq.")
+
+    # No sensitive info frome exception is raised
+    assert "Sensitive internal provider error" not in str(events)
+
+    # Stream is closed.
+    response.close.assert_awaited_once()
+
+
+async def test_groq_handler_stream_chat_emits_empty_chunks():
+    """Validate async ``on_usage_complete`` receives correct usage data."""
+
+    chunks = []
+    mock_client = _mock_client(chunks)
+
+    async_usage_data = []
+
+    with patch("app.services.llm.groq_handler.AsyncGroq", return_value=mock_client):
+        handler = GroqHandler(api_key="dummy-key")
+        result = []
+        async for ev in handler.stream_chat(
+            model="groq/gemma-2",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+            if ev.type == StreamEventType.USAGE:
+                async_usage_data.append(ev.data)
+
+    assert result == []
+    assert async_usage_data == []
+    response = mock_client.chat.completions.create.return_value
+    response.close.assert_awaited_once()
