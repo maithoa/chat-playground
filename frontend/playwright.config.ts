@@ -8,14 +8,6 @@ export default defineConfig({
     baseURL: "http://localhost:5173", // URL dev server của bạn
     trace: "on-first-retry",
   },
-  webServer: {
-    command: process.env.CI
-      ? "npm run preview -- --port 5173 --strictPort --host"
-      : "npm run dev -- --port 5173 --strictPort",
-    url: "http://localhost:5173",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
   projects: [
     {
       name: "chromium",
