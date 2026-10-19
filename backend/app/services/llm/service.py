@@ -72,6 +72,7 @@ class LLMService:
                 yield streamEvent
         except asyncio.CancelledError:
             logger.warning("Stream cancelled by client disconnect.")
+            raise
 
         except Exception as ex:
             logger.error(f"Unhandled error during streaming: {ex}")

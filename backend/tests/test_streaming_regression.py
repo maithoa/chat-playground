@@ -1,9 +1,13 @@
 import pytest
 import asyncio
-from httpx import AsyncClient, ASGITransport
-from unittest.mock import patch
+from httpx import AsyncClient, ASGITransport, Request
+from unittest.mock import patch, AsyncMock, MagicMock
 from app.main import app
 from app.services.llm.catalog import ProviderInfo, ModelInfo
+from app.services.llm.service import LLMService
+from app.services.llm.groq_handler import GroqHandler
+from app.schemas.llm import StreamEvent, StreamEventType
+from groq import APITimeoutError
 
 
 @pytest.fixture
@@ -77,6 +81,104 @@ async def test_streaming_timeout_resilience(client: AsyncClient):
         assert response.status_code in [200, 504, 503, 400, 422]
     except asyncio.TimeoutError:
         pytest.fail("Request hung beyond expected timeout threshold.")
+
+
+@pytest.mark.asyncio
+async def test_streaming_cancellation_closes_provider_stream():
+    waiting = asyncio.Event()
+    blocker = asyncio.Event()
+
+    async def provider_stream():
+        yield MagicMock(
+            choices=[MagicMock(delta=MagicMock(content="Hello"))],
+            usage=None,
+        )
+        waiting.set()
+        await blocker.wait()
+
+    generator = provider_stream()
+
+    response = MagicMock()
+    response.__aiter__.side_effect = lambda: generator
+    response.close = AsyncMock(side_effect=generator.aclose)
+
+    mock_client = AsyncMock()
+    mock_client.chat.completions.create.return_value = response
+
+    with patch(
+        "app.services.llm.groq_handler.AsyncGroq",
+        return_value=mock_client,
+    ):
+        handler = GroqHandler(api_key="dummy-key")
+
+    received = []
+
+    async def consume():
+        async for event in LLMService.stream_chat(
+            provider="groq",
+            model="test-model",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            received.append(event)
+
+    with (
+        patch.object(LLMService, "_ensure_init_handlers"),
+        patch.object(LLMService, "_handlers", {"groq": handler}),
+    ):
+        task = asyncio.create_task(consume())
+
+        try:
+            # Chắc chắn provider đã phát content và đang chờ.
+            await asyncio.wait_for(waiting.wait(), timeout=2.0)
+
+            task.cancel()
+
+            # Cancellation phải truyền qua LLMService.
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=2.0)
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    assert [event.type for event in received] == [
+        StreamEventType.CONTENT,
+    ]
+    assert received[0].data == "Hello"
+    response.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_streaming_handles_groq_sdk_timeout():
+    mock_client = AsyncMock()
+    mock_client.chat.completions.create.side_effect = APITimeoutError(
+        request=Request("POST", "https://api.groq.com/test")
+    )
+
+    with patch(
+        "app.services.llm.groq_handler.AsyncGroq",
+        return_value=mock_client,
+    ):
+        handler = GroqHandler(api_key="dummy-key")
+
+    async def collect_events():
+        return [
+            event
+            async for event in handler.stream_chat(
+                model="test-model",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+        ]
+
+    events = await asyncio.wait_for(
+        collect_events(),
+        timeout=2.0,
+    )
+
+    assert len(events) == 1
+    assert events[0].type == StreamEventType.ERROR
+    assert events[0].data == "Timeout trying to access Groq API."
+    mock_client.chat.completions.create.assert_awaited_once()
 
 
 # ==========================================

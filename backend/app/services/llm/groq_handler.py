@@ -2,7 +2,7 @@ import inspect
 import time
 from loguru import logger
 from typing import AsyncGenerator, List, Dict, Any, Callable, Optional
-from groq import AsyncGroq
+from groq import AsyncGroq, APITimeoutError
 from httpx import TimeoutException
 
 from app.core.config import settings
@@ -49,7 +49,7 @@ class GroqHandler(BaseLLMHandler):
                         )
 
                     yield StreamEvent(type=StreamEventType.CONTENT, data=content)
-        except TimeoutException as e:
+        except (APITimeoutError, TimeoutException) as e:
             safe_error_message = "Timeout trying to access Groq API."
             logger.error(f"{safe_error_message} {str(e)}")
             yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
