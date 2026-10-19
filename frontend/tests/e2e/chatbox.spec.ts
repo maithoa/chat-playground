@@ -3,6 +3,20 @@ import { test, expect } from "@playwright/test";
 test.describe("ChatBox Feature E2E Test Suite", () => {
   // Navigate to the chat page before each test case
   test.beforeEach(async ({ page }) => {
+    // Mock API call for list of models
+    await page.route("**/llm/providers", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "groq",
+            name: "Groq",
+            models: [{ id: "openai/gpt-oss-120b", name: "GPT OSS 120B" }],
+          },
+        ]),
+      });
+    });
     // Adjust the URL path to match routing configuration
     await page.goto("/chat");
     // Wait for page to load
@@ -21,7 +35,8 @@ test.describe("ChatBox Feature E2E Test Suite", () => {
     await expect(textarea).toBeVisible();
     await expect(textarea).toHaveValue("");
 
-    const submitButton = page.locator('button[type="submit"]');
+    //const submitButton = page.locator('button[type="submit"]');
+    const submitButton = page.getByTestId("send-msg-button");
     await expect(submitButton).toBeDisabled();
   });
 
