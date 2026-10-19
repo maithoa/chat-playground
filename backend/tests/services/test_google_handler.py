@@ -34,14 +34,7 @@ class MockChunk:
 
 
 def _mock_client(chunks):
-    """Create an ``AsyncMock`` client that yields ``StreamEvent`` objects.
-
-    The real handler yields ``StreamEvent`` objects, so the mock client must do the
-    same. ``chunks`` is a list of ``MockChunk`` objects (containing ``text`` and
-    optional ``usage_metadata``). For each chunk we emit a ``CONTENT`` event if the
-    ``text`` attribute is present, and a ``USAGE`` event if ``usage_metadata``
-    exists.
-    """
+    """Create a mock Google client returning an async stream of MockChunk."""
 
     async def mock_stream():
         for c in chunks:

@@ -17,13 +17,7 @@ class MockChunk:
 
 
 def _mock_client(chunks):
-    """Create an AsyncMock client that yields the provided ``chunks``.
-
-    The OpenRouterHandler calls ``self.client.chat.completions.create`` and then
-    iterates over the returned async generator.  Here we replace ``create`` with
-    an ``AsyncMock`` that returns an async generator yielding the supplied
-    ``chunks``.
-    """
+    """Create a mock Google client returning an async stream of MockChunk."""
 
     async def mock_stream():
         for c in chunks:
