@@ -10,6 +10,8 @@ export default defineConfig({
     globals: true,
     environment: "happy-dom",
     setupFiles: "./src/tests/setup.ts",
+    include: ["src/**/*.{test,spec}.{ts,tsx}"], // Define where is the unit test
+    exclude: ["tests/e2e/**", "node_modules/**"], // Exclude vitest out of tests/e2e/*
   },
   resolve: {
     alias: {
