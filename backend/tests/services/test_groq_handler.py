@@ -235,3 +235,29 @@ async def test_groq_handler_closes_stream_on_midstream_error():
 
     # Stream is closed.
     response.close.assert_awaited_once()
+
+
+async def test_groq_handler_stream_chat_emits_empty_chunks():
+    """Validate async ``on_usage_complete`` receives correct usage data."""
+
+    chunks = []
+    mock_client = _mock_client(chunks)
+
+    async_usage_data = []
+
+    with patch("app.services.llm.groq_handler.AsyncGroq", return_value=mock_client):
+        handler = GroqHandler(api_key="dummy-key")
+        result = []
+        async for ev in handler.stream_chat(
+            model="groq/gemma-2",
+            messages=[{"role": "user", "content": "hi"}],
+        ):
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+            if ev.type == StreamEventType.USAGE:
+                async_usage_data.append(ev.data)
+
+    assert result == []
+    assert async_usage_data == []
+    response = mock_client.chat.completions.create.return_value
+    response.close.assert_awaited_once()

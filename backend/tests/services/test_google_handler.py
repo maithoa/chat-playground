@@ -280,3 +280,31 @@ async def test_google_handler_closes_stream_on_midstream_error():
 
     # Stream is closed.
     response.aclose.assert_awaited_once()
+
+
+async def test_google_handler_stream_chat_empty_chunks():
+    """Verify that ``GoogleHandler.stream_chat`` yields the expected content.
+
+    The test injects a mock ``genai.Client`` that returns a small series of
+    chunks.  No usage callback is provided – the handler should simply yield the
+    ``content`` values.
+    """
+
+    chunks = []
+    mock_client = _mock_client(chunks)
+
+    with patch(
+        "app.services.llm.google_handler.genai.Client", return_value=mock_client
+    ):
+        handler = GoogleHandler(api_key="dummy-key")
+        result = []
+        async for ev in handler.stream_chat(
+            model="gemini-1.5-flash", messages=[{"role": "user", "content": "hi"}]
+        ):
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+
+    assert result == []
+
+    response = mock_client.aio.models.generate_content_stream.return_value
+    response.aclose.assert_awaited_once()

@@ -35,7 +35,7 @@ def _mock_client(chunks):
 
 
 @pytest.mark.asyncio
-async def test_openrouter_handler_stream_chat_with_async_usage_callback():
+async def test_openrouter_handler_stream_chat_with_async_usage_data():
     """Ensure that an async ``on_usage_complete`` callback receives the correct data."""
 
     usage = CompletionUsage(prompt_tokens=5, completion_tokens=10, total_tokens=15)
@@ -86,7 +86,7 @@ async def test_openrouter_handler_stream_chat_with_async_usage_callback():
 
 
 @pytest.mark.asyncio
-async def test_openrouter_handler_stream_chat_with_sync_usage_callback():
+async def test_openrouter_handler_stream_chat_with_sync_usage_data():
     """Ensure that a regular (sync) ``on_usage_complete`` callback is also supported."""
 
     usage = CompletionUsage(prompt_tokens=2, completion_tokens=3, total_tokens=5)
@@ -238,4 +238,40 @@ async def test_openrouter_handler_closes_stream_on_midstream_error():
     assert "Sensitive internal provider error" not in str(events)
 
     # Stream is closed.
+    response.aclose.assert_awaited_once()
+
+
+async def test_openrouter_handler_stream_chat_empty_chunk():
+    """Ensure that handler runs even when empty chunks are returned from Provider APIs"""
+
+    chunks = []
+
+    mock_client = _mock_client(chunks)
+
+    async_usage_data = []
+
+    async def async_callback(data):
+        async_usage_data.append(data)
+
+    with patch(
+        "app.services.llm.openrouter_handler.AsyncOpenAI", return_value=mock_client
+    ):
+        handler = OpenRouterHandler(api_key="sk-test-key")
+        messages = [{"role": "user", "content": "Hi"}]
+        result = []
+        async_usage_data = []
+        async for ev in handler.stream_chat(
+            model="openrouter/gpt-4",
+            messages=messages,
+        ):
+            if ev.type == StreamEventType.CONTENT:
+                result.append(ev.data)
+            if ev.type == StreamEventType.USAGE:
+                async_usage_data.append(ev.data)
+
+    # Verify streamed content (excluding the final ``None`` chunk)
+    assert result == []
+    # Verify the async callback was invoked exactly once with the expected dict
+    assert async_usage_data == []
+    response = mock_client.chat.completions.create.return_value
     response.aclose.assert_awaited_once()

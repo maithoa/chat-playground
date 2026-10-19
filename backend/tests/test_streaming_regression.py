@@ -41,7 +41,6 @@ def mock_llm_providers():
 # ==========================================
 
 
-@pytest.mark.anyio
 @pytest.mark.asyncio
 async def test_streaming_disconnect_handling():
     first_chunk_sent = asyncio.Event()
@@ -285,7 +284,7 @@ async def test_exception_leakage_and_credential_safety(client: AsyncClient):
 
 
 @pytest.mark.anyio
-async def test_provider_uninitialized_metrics_safety(client: AsyncClient):
+async def test_endpoint_accepts_empty_stream(client: AsyncClient):
     """
     Verify backend handles provider returning empty streams or uninitialized metrics safely
     without throwing NoneType errors.
