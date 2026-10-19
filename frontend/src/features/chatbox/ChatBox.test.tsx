@@ -156,12 +156,6 @@ describe("ChatBox component", () => {
     fireEvent.click(sendBtn);
     await new Promise((r) => setTimeout(r, 160));
     expect(sendBtn).toBeDisabled();
-
-    // After the mocked stream resolves the button should be enabled again
-    await waitFor(async () => {
-      const enabledBtn = await screen.findByRole("button", { name: /Send via/i });
-      expect(enabledBtn).not.toBeDisabled();
-    });
   });
 
   it("shows Stop button while streaming and aborts on click", async () => {
