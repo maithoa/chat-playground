@@ -85,9 +85,12 @@ class GoogleHandler(BaseLLMHandler):
 
         start_time = time.perf_counter()
         time_to_first_chunk = 0.0
+        duration_seconds = 0.0
 
         last_chunk = None
         first_chunk = True
+
+        response = None
         try:
             response = await self.client.aio.models.generate_content_stream(
                 model=model, contents=contents, config=config, **kwargs
@@ -108,6 +111,7 @@ class GoogleHandler(BaseLLMHandler):
             safe_error_message = "Timeout trying to access Google API."
             logger.error(f"{safe_error_message} {str(e)}")
             yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
+            return
 
         except Exception as ex:
             safe_error_message = (
@@ -115,24 +119,25 @@ class GoogleHandler(BaseLLMHandler):
             )
             logger.error(f"{safe_error_message} {str(ex)}")
             yield StreamEvent(type=StreamEventType.ERROR, data=safe_error_message)
+            return
 
         finally:
-            if last_chunk and getattr(last_chunk, "usage_metadata", None):
-                duration_seconds = time.perf_counter() - start_time
-                # For google api, then output tokens is stored in usage_metadata's candidates_token_count
-                completion_tokens = (
-                    last_chunk.usage_metadata.candidates_token_count or 0
-                )
-                tokens_per_second = (
-                    (completion_tokens / duration_seconds)
-                    if duration_seconds > 0
-                    else 0
-                )
-                usage_data = {
-                    "prompt_tokens": last_chunk.usage_metadata.prompt_token_count,
-                    "completion_tokens": last_chunk.usage_metadata.candidates_token_count,
-                    "total_tokens": last_chunk.usage_metadata.total_token_count,
-                    "time_to_first_token_ms": round(time_to_first_chunk * 1000, 2),
-                    "tokens_per_second": round(tokens_per_second, 2),
-                }
-                yield StreamEvent(type=StreamEventType.USAGE, data=usage_data)
+            if response is not None:
+                logger.info(f"Google Response type: {type(response)}")
+                await response.aclose()
+
+        if last_chunk and getattr(last_chunk, "usage_metadata", None):
+            duration_seconds = time.perf_counter() - start_time
+            # For google api, then output tokens is stored in usage_metadata's candidates_token_count
+            completion_tokens = last_chunk.usage_metadata.candidates_token_count or 0
+            tokens_per_second = (
+                (completion_tokens / duration_seconds) if duration_seconds > 0 else 0
+            )
+            usage_data = {
+                "prompt_tokens": last_chunk.usage_metadata.prompt_token_count,
+                "completion_tokens": last_chunk.usage_metadata.candidates_token_count,
+                "total_tokens": last_chunk.usage_metadata.total_token_count,
+                "time_to_first_token_ms": round(time_to_first_chunk * 1000, 2),
+                "tokens_per_second": round(tokens_per_second, 2),
+            }
+            yield StreamEvent(type=StreamEventType.USAGE, data=usage_data)

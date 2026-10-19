@@ -20,24 +20,25 @@ class MockChunk:
 
 
 def _mock_client(chunks):
-    """Create an ``AsyncMock`` client that yields ``StreamEvent`` objects.
-
-    ``chunks`` is a list of ``MockChunk`` objects (containing ``content`` and an
-    optional ``usage`` attribute). For each chunk we emit a ``CONTENT`` event if
-    ``content`` is present, and a ``USAGE`` event if ``usage`` exists.
-    """
+    """Create a mock Groq client returning an async stream of MockChunk objects."""
 
     async def mock_stream():
         for c in chunks:
             yield c
 
+    generator = mock_stream()
+
+    response = MagicMock()
+    response.__aiter__.side_effect = lambda: generator
+    response.close = AsyncMock(side_effect=generator.aclose)
+
     client = AsyncMock()
-    client.chat.completions.create = AsyncMock(return_value=mock_stream())
+    client.chat.completions.create.return_value = response
     return client
 
 
 @pytest.mark.asyncio
-async def test_groq_handler_stream_chat_with_async_usage_callback():
+async def test_groq_handler_stream_chat_emits_content_and_usage():
     """Validate async ``on_usage_complete`` receives correct usage data."""
 
     usage = type(
@@ -78,10 +79,12 @@ async def test_groq_handler_stream_chat_with_async_usage_callback():
             "tokens_per_second": 100,
         }
     ]
+    response = mock_client.chat.completions.create.return_value
+    response.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_groq_handler_stream_chat_with_sync_usage_callback():
+async def test_groq_handler_stream_chat_calculates_tokens_per_second():
     """Validate sync ``on_usage_complete`` works as expected."""
 
     usage = type(
@@ -122,6 +125,8 @@ async def test_groq_handler_stream_chat_with_sync_usage_callback():
             "tokens_per_second": 37.5,
         }
     ]
+    response = mock_client.chat.completions.create.return_value
+    response.close.assert_awaited_once()
 
 
 def test_groq_handler_missing_api_key():
@@ -187,3 +192,46 @@ async def test_groq_handler_stream_chat_timeout_error():
     assert len(events) == 1
     assert events[0].type == StreamEventType.ERROR
     assert "timeout" in str(events[0].data).lower()
+
+
+@pytest.mark.asyncio
+async def test_groq_handler_closes_stream_on_midstream_error():
+    async def failing_stream():
+        yield MockChunk("Hello")
+        raise RuntimeError("Sensitive internal provider error")
+
+    generator = failing_stream()
+
+    response = MagicMock()
+    response.__aiter__.side_effect = lambda: generator
+    response.close = AsyncMock(side_effect=generator.aclose)
+
+    mock_client = AsyncMock()
+    mock_client.chat.completions.create.return_value = response
+
+    with patch(
+        "app.services.llm.groq_handler.AsyncGroq",
+        return_value=mock_client,
+    ):
+        handler = GroqHandler(api_key="dummy-key")
+        events = [
+            event
+            async for event in handler.stream_chat(
+                model="groq/gemma-2",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+        ]
+
+    # Content and error is received, no usage
+    assert [event.type for event in events] == [
+        StreamEventType.CONTENT,
+        StreamEventType.ERROR,
+    ]
+    assert events[0].data == "Hello"
+    assert events[1].data == ("Error occurred while streaming chat content from Groq.")
+
+    # No sensitive info frome exception is raised
+    assert "Sensitive internal provider error" not in str(events)
+
+    # Stream is closed.
+    response.close.assert_awaited_once()

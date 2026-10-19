@@ -29,8 +29,14 @@ def _mock_client(chunks):
         for c in chunks:
             yield c
 
+    generator = mock_stream()
+
+    response = MagicMock()
+    response.__aiter__.side_effect = lambda: generator
+    response.aclose = AsyncMock(side_effect=generator.aclose)
+
     client = AsyncMock()
-    client.chat.completions.create = AsyncMock(return_value=mock_stream())
+    client.chat.completions.create.return_value = response
     return client
 
 
@@ -81,6 +87,8 @@ async def test_openrouter_handler_stream_chat_with_async_usage_callback():
             "tokens_per_second": IS_POSITIVE,
         }
     ]
+    response = mock_client.chat.completions.create.return_value
+    response.aclose.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -122,6 +130,8 @@ async def test_openrouter_handler_stream_chat_with_sync_usage_callback():
             "tokens_per_second": IS_POSITIVE,
         }
     ]
+    response = mock_client.chat.completions.create.return_value
+    response.aclose.assert_awaited_once()
 
 
 def test_openrouter_handler_missing_api_key():
@@ -190,3 +200,48 @@ async def test_openrouter_handler_stream_chat_timeout_error():
     assert len(events) == 1
     assert events[0].type == StreamEventType.ERROR
     assert "timeout" in str(events[0].data).lower()
+
+
+@pytest.mark.asyncio
+async def test_openrouter_handler_closes_stream_on_midstream_error():
+    async def failing_stream():
+        yield MockChunk("Hello")
+        raise RuntimeError("Sensitive internal provider error")
+
+    generator = failing_stream()
+
+    response = MagicMock()
+    response.__aiter__.side_effect = lambda: generator
+    response.aclose = AsyncMock(side_effect=generator.aclose)
+
+    mock_client = AsyncMock()
+    mock_client.chat.completions.create.return_value = response
+
+    with patch(
+        "app.services.llm.openrouter_handler.AsyncOpenAI",
+        return_value=mock_client,
+    ):
+        handler = OpenRouterHandler(api_key="dummy-key")
+        events = [
+            event
+            async for event in handler.stream_chat(
+                model="groq/gemma-2",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+        ]
+
+    # Content and error is received, no usage
+    assert [event.type for event in events] == [
+        StreamEventType.CONTENT,
+        StreamEventType.ERROR,
+    ]
+    assert events[0].data == "Hello"
+    assert events[1].data == (
+        "Error occurred while streaming chat content from OpenRouter."
+    )
+
+    # No sensitive info frome exception is raised
+    assert "Sensitive internal provider error" not in str(events)
+
+    # Stream is closed.
+    response.aclose.assert_awaited_once()
