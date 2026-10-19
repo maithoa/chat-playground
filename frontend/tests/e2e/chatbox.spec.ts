@@ -3,8 +3,11 @@ import { test, expect } from "@playwright/test";
 test.describe("ChatBox Feature E2E Test Suite", () => {
   // Navigate to the chat page before each test case
   test.beforeEach(async ({ page }) => {
-    // Adjust the URL path to match your local routing configuration
+    // Adjust the URL path to match routing configuration
     await page.goto("/chat");
+    // Wait for page to load
+    const textarea = page.locator("textarea");
+    await textarea.waitFor({ state: "visible", timeout: 10000 });
   });
 
   /**
