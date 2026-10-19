@@ -3,6 +3,7 @@ import asyncio
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import patch
 from app.main import app
+from app.services.llm.catalog import ProviderInfo, ModelInfo
 
 
 @pytest.fixture
@@ -12,6 +13,22 @@ async def client():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
         yield ac
+
+
+@pytest.fixture(autouse=True)
+def mock_llm_providers():
+    """Autouse fixture to ensure LLM providers validation always passes in CI/CD without real API keys."""
+    providers = [
+        ProviderInfo(
+            id="groq",
+            name="Groq",
+            models=[ModelInfo(id="openai/gpt-oss-120b", name="GPT-OSS 120B")],
+        )
+    ]
+    with patch(
+        "app.services.llm.service.LLMService.get_llm_providers", return_value=providers
+    ):
+        yield
 
 
 # ==========================================
