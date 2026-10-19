@@ -27,7 +27,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run Backend Pytest suite
-        working-directory: backendnp
+        working-directory: backend
         env:
           # Set environtment variables for app to run
           PORT: 8686
@@ -61,13 +61,6 @@ jobs:
       # Run playwright e2e test
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
-
-      # run Frontend Dev Server at background
-      - name: Start Frontend Dev Server
-        working-directory: ./frontend
-        run: |
-          npm run dev &
-          npx wait-on http://localhost:5173 --timeout 60000
 
       - name: Run Playwright E2E Tests
         working-directory: ./frontend
