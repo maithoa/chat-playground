@@ -62,6 +62,12 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
+      - name: Start Preview Server & Health Check
+        working-directory: frontend
+        run: |
+          npx vite preview --port 5173 --host &
+          npx wait-on http://localhost:5173 --timeout 30000
+
       - name: Run Playwright E2E Tests
         working-directory: ./frontend
         run: npm run test:e2e
