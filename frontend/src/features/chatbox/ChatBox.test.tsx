@@ -15,7 +15,7 @@
  * The project uses **vitest** + **happy-dom**, so we rely on those globals.
  */
 
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import * as llmService from "@/services/llmService";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ChatBox } from "@/features/chatbox/ChatBox";
@@ -38,7 +38,6 @@ vi.mock("@/components/Button/SendMsgToModel/SendMsgToModel", () => ({
   ),
 }));
 
-let tokenCounterProps: any = null;
 vi.mock("@/components/Module/StreamWindow", () => ({
   StreamWindow: ({ messages, isGenerating, onStop }: any) => (
     <div data-testid="stream-window">
@@ -57,8 +56,7 @@ vi.mock("@/components/Module/StreamWindow", () => ({
 }));
 
 vi.mock("@/components/Module/ConversationTokenCounter", () => ({
-  ConversationTokenCounter: (props: any) => {
-    tokenCounterProps = props;
+  ConversationTokenCounter: () => {
     return <div data-testid="token-counter" />;
   },
 }));
@@ -162,7 +160,7 @@ describe("ChatBox component", () => {
     // After the mocked stream resolves the button should be enabled again
     await waitFor(async () => {
       const enabledBtn = await screen.findByRole("button", { name: /Send via/i });
-      //expect(enabledBtn).not.toBeDisabled();
+      expect(enabledBtn).not.toBeDisabled();
     });
   });
 
