@@ -17,6 +17,7 @@ from typing import AsyncGenerator, List
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
+import asyncio
 
 from app.main import app
 from app.schemas.llm import ProviderInfo, ModelInfo, ChatRequest
@@ -179,3 +180,84 @@ def test_chat_stream_invalid_model():
     response = _post_chat(payload)
     assert response.status_code == 400
     assert "Model 'unknownmodel' is not supported" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_chat_disconnect_from_client_cleans_up_service_stream():
+    waiting_for_next_chunk = asyncio.Event()
+    stream_closed = asyncio.Event()
+    wait_forever = asyncio.Event()
+
+    async def fake_stream_chat(*args, **kwargs):
+        try:
+            yield StreamEvent(type=StreamEventType.CONTENT, data="Hello")
+
+            waiting_for_next_chunk.set()
+            await wait_forever.wait()
+        finally:
+            stream_closed.set()
+
+    payload = {
+        "provider": "testprovider",
+        "model": "testmodel",
+        "messages": [],
+        "temperature": 0.7,
+    }
+
+    request_received = False
+
+    async def receive():
+        nonlocal request_received
+        if not request_received:
+            request_received = True
+            return {
+                "type": "http.request",
+                "body": json.dumps(payload).encode(),
+                "more_body": False,
+            }
+        await waiting_for_next_chunk.wait()
+        return {"type": "http.disconnect"}
+
+    sent_messages = []
+
+    async def send(message):
+        sent_messages.append(message)
+
+    scope = {
+        "type": "http",
+        "aspi": {
+            "version": "3.0",
+            "spec_version": "2.3",
+        },
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/v1/llm/chat",
+        "query_string": b"",
+        "root_path": "",
+        "headers": [(b"content-type", b"application/json")],
+        "client": ("127.0.0.1", 12345),
+        "server": ("test", 80),
+    }
+
+    with patch(
+        "app.services.llm.service.LLMService.stream_chat", side_effect=fake_stream_chat
+    ):
+        await asyncio.wait_for(
+            app(scope, receive, send),
+            timeout=2.0,
+        )
+
+    assert waiting_for_next_chunk.is_set()
+    assert stream_closed.is_set()
+
+    response_start = next(
+        message for message in sent_messages if message["type"] == "http.response.start"
+    )
+
+    assert response_start["status"] == 200
+
+    assert any(
+        message["type"] == "http.response.body" and b"Hello" in message.get("body", b"")
+        for message in sent_messages
+    )
