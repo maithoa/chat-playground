@@ -13,10 +13,14 @@ async def _event_stream(events):
 class MockHandler:
     def __init__(self, events):
         self._events = events
+        self.closed = False
 
     async def stream_chat(self, model, messages, **kwargs):
-        async for ev in _event_stream(self._events):
-            yield ev
+        try:
+            async for ev in _event_stream(self._events):
+                yield ev
+        finally:
+            self.closed = True
 
 
 @pytest.mark.asyncio
@@ -60,3 +64,30 @@ async def test_llm_service_missing_provider():
                 provider="unknown", model="model-x", messages=[]
             ):
                 pass
+
+
+@pytest.mark.asyncio
+async def test_llm_service_closed_handler_when_closed_early():
+    mock_handler = MockHandler(
+        [
+            StreamEvent(type=StreamEventType.CONTENT, data="Hello"),
+            StreamEvent(type=StreamEventType.CONTENT, data="World!"),
+        ]
+    )
+
+    with patch.object(LLMService, "_ensure_init_handlers"), patch.object(
+        LLMService, "_handlers", {"dummy": mock_handler}
+    ):
+        service_stream = LLMService.stream_chat(
+            provider="dummy", model="model-x", messages=[]
+        )
+
+        try:
+            first_event = await anext(service_stream)
+
+            assert first_event.data == "Hello"
+            assert mock_handler.closed is False
+        finally:
+            await service_stream.aclose()
+
+        assert mock_handler.closed is True

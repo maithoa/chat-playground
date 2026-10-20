@@ -225,7 +225,7 @@ async def test_chat_disconnect_from_client_cleans_up_service_stream():
 
     scope = {
         "type": "http",
-        "aspi": {
+        "asgi": {
             "version": "3.0",
             "spec_version": "2.3",
         },
