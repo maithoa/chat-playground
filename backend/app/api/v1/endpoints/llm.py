@@ -59,15 +59,15 @@ async def chat_stream(request: ChatRequest):
 
     # Stream generator
     async def event_generator():
+        stream = None
         try:
-            stream = LLMService.stream_chat(
+            result = LLMService.stream_chat(
                 provider=provider_info.id,
                 model=model_info.id,
                 messages=request.messages,
                 temperature=request.temperature,
             )
-            if inspect.iscoroutine(stream):
-                stream = await stream
+            stream = await result if inspect.iscoroutine(result) else result
 
             async for streamEvent in stream:
                 yield streamEvent.to_sse_data()
@@ -79,6 +79,11 @@ async def chat_stream(request: ChatRequest):
                 type=StreamEventType.ERROR, data=safe_error_message
             )
             yield error_event.to_sse_data()
+
+        finally:
+            if stream is not None:
+                await stream.aclose()
+                logger.info("API end point closed stream service.")
 
     return StreamingResponse(
         event_generator(),
