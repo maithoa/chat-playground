@@ -23,6 +23,8 @@ from app.main import app
 from app.schemas.llm import ProviderInfo, ModelInfo, ChatRequest
 from app.schemas.llm import StreamEventType, StreamEvent
 
+from app.api.v1.endpoints.llm import chat_stream
+
 client = TestClient(app)
 
 
@@ -261,3 +263,41 @@ async def test_chat_disconnect_from_client_cleans_up_service_stream():
         message["type"] == "http.response.body" and b"Hello" in message.get("body", b"")
         for message in sent_messages
     )
+
+
+@pytest.mark.asyncio
+async def test_chat_closes_service_stream_when_closed_early():
+    service_closed = False
+
+    async def fake_service_stream(*args, **kwargs):
+        nonlocal service_closed
+        try:
+            yield StreamEvent(type=StreamEventType.CONTENT, data="Hello")
+            yield StreamEvent(type=StreamEventType.CONTENT, data="World")
+        finally:
+            service_closed = True
+
+    payload = {
+        "provider": "testprovider",
+        "model": "testmodel",
+        "messages": [],
+        "temperature": 0.7,
+    }
+    request = ChatRequest(**payload)
+
+    with patch(
+        "app.services.llm.service.LLMService.stream_chat",
+        side_effect=fake_service_stream,
+    ):
+        response = await chat_stream(request=request)
+        api_stream = response.body_iterator
+
+        try:
+            first_chunk = await anext(api_stream)
+
+            assert "Hello" in first_chunk
+            assert service_closed is False
+        finally:
+            await api_stream.aclose()
+
+        assert service_closed is True
