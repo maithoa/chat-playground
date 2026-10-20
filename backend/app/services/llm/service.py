@@ -60,12 +60,15 @@ class LLMService:
         # iterate over it directly. Tests mock this method with a ``MagicMock``
         # that returns an async generator, so no special await handling is
         # required.
+        handler_stream = None
         try:
-            async for streamEvent in handler.stream_chat(
+            handler_stream = handler.stream_chat(
                 model=model,
                 messages=messages,
                 **kwargs,
-            ):
+            )
+
+            async for streamEvent in handler_stream:
                 if streamEvent.type == StreamEventType.USAGE:
                     cls.on_usage_complete(streamEvent.data)
 
@@ -80,3 +83,7 @@ class LLMService:
                 type=StreamEventType.ERROR,
                 data="An error occurred while streaming response.",
             )
+        finally:
+            if handler_stream is not None:
+                await handler_stream.aclose()
+                logger.info("LLM service stream closed.")
