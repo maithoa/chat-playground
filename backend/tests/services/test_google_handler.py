@@ -298,13 +298,17 @@ async def test_google_handler_stream_chat_empty_chunks():
     ):
         handler = GoogleHandler(api_key="dummy-key")
         result = []
+        error = []
         async for ev in handler.stream_chat(
             model="gemini-1.5-flash", messages=[{"role": "user", "content": "hi"}]
         ):
             if ev.type == StreamEventType.CONTENT:
                 result.append(ev.data)
+            if ev.type == StreamEventType.ERROR:
+                error.append(ev.data)
 
     assert result == []
+    assert error == []
 
     response = mock_client.aio.models.generate_content_stream.return_value
     response.aclose.assert_awaited_once()
