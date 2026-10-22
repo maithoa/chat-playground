@@ -60,6 +60,7 @@ jobs:
 
       # Run playwright e2e test
       - name: Install Playwright Browsers
+        working-directory: frontend
         run: npx playwright install --with-deps
 
       - name: Build Frontend Production
