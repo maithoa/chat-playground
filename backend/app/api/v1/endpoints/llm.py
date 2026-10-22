@@ -8,7 +8,7 @@ from app.services.llm.service import LLMService
 from app.schemas.llm import StreamEventType, StreamEvent
 from loguru import logger
 
-from app.core.security import verify_rate_limit_and_quota, redis_client
+from app.core.security import verify_rate_limit_and_quota
 
 router = APIRouter(prefix="/llm", tags=["LLM Chat"])
 

@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from starlette.requests import Request
 
 from app.core.security import verify_rate_limit_and_quota
@@ -28,6 +28,10 @@ def redis_mock():
 
     client = MagicMock()
     client.pipeline.return_value = pipe
+    client.get = AsyncMock(return_value=None)
+
+    pipe.__aenter__ = AsyncMock(return_value=pipe)
+    pipe.__aexit__ = AsyncMock(return_value=None)
 
     with (
         patch("app.core.security.redis_client", new=client),
@@ -104,3 +108,31 @@ async def test_existing_counter_exceeds_limit(redis_mock):
     assert exc.value.status_code == 429
     assert exc.value.detail == "Exceeded limit of 10 requests/min."
     pipe.execute.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_token_quota_exceeded(redis_mock):
+    client, pipe = redis_mock
+    pipe.execute.return_value = [1, True]
+    client.get = AsyncMock(return_value=5000)
+
+    with pytest.raises(HTTPException) as exc:
+        await verify_rate_limit_and_quota(make_request())
+
+    assert exc.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+    assert "Exceeded daily token quota" in exc.value.detail
+    pipe.execute.assert_awaited_once_with()
+    client.get.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_token_quota_within_limit(redis_mock):
+    client, pipe = redis_mock
+    pipe.execute.return_value = [1, True]
+    client.get = AsyncMock(return_value=4999)
+
+    result = await verify_rate_limit_and_quota(make_request())
+
+    assert result == "session-123"
+    pipe.execute.assert_awaited_once_with()
+    client.get.assert_awaited_once()

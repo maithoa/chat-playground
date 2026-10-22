@@ -97,8 +97,13 @@ def mock_redis():
     mock_pipeline = MagicMock()
     mock_pipeline.execute = AsyncMock(return_value=[1, True])
 
+    mock_pipeline.__aenter__ = AsyncMock(return_value=mock_pipeline)
+    mock_pipeline.__aexit__ = AsyncMock(return_value=None)
+
     redis_client = MagicMock()
     redis_client.pipeline.return_value = mock_pipeline
+
+    redis_client.get = AsyncMock(return_value=None)
 
     with patch("app.core.security.redis_client", new=redis_client):
         yield redis_client
