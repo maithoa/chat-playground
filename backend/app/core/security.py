@@ -12,7 +12,10 @@ redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
 
 async def verify_rate_limit_and_quota(request: Request):
     # Get the client IP and session id
-    client_ip = request.client.host
+    client_ip = getattr(request.client, "host", None)
+    if not client_ip:
+        raise AttributeError("Missing client ip")
+
     forward_for = request.headers.get("x-forwarded-for")
     if forward_for:
         client_ip = forward_for.split(",")[0].strip()
@@ -23,7 +26,14 @@ async def verify_rate_limit_and_quota(request: Request):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing x-session-id in header.",
         )
-    logger.info(f"Session id: {session_id}")
+
+    if ":" in session_id or len(session_id) > 128:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid x-session-id format.",
+        )
+
+    logger.info(f"Session id: {session_id}, IP: {client_ip}")
 
     await _check_rate_limit(client_ip=client_ip, session_id=session_id)
     await _check_token_quota(client_ip=client_ip, session_id=session_id)
@@ -88,6 +98,11 @@ async def _check_token_quota(client_ip: str, session_id: str):
 
 async def update_token_usage(client_ip: str, session_id: str, total_tokens: int):
     """This method is called after LLM return the usage tokens."""
+
+    if not isinstance(total_tokens, int) or total_tokens < 0:
+        logger.error(f"Invalid token count received: {total_tokens}")
+        raise ValueError("total_tokens must be a non-negative integer.")
+
     today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
     quota_key = f"quota:{client_ip}:{session_id}:{today_str}"
 

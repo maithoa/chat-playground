@@ -8,10 +8,17 @@ from starlette.requests import Request
 from app.core.security import verify_rate_limit_and_quota, update_token_usage
 
 
-def make_request(*, client=("127.0.0.1", 12345), session_id="session-123"):
+def make_request(
+    *, client=("127.0.0.1", 12345), session_id="session-123", headers_extra=None
+):
     headers = []
     if session_id is not None:
         headers.append((b"x-session-id", session_id.encode()))
+
+    # Add header extra if exist in params
+    if headers_extra:
+        for k, v in headers_extra.items():
+            headers.append((k.encode(), v.encode()))
 
     return Request(
         {
@@ -148,11 +155,54 @@ async def test_update_token_usage(redis_mock):
     # Process the function with 20 tokens
     await update_token_usage("127.0.0.1", "session-123", total_tokens)
 
-    # Tính toán key theo đúng định dạng ngày giờ hiện tại UTC
     today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
     expected_key = f"quota:127.0.0.1:session-123:{today_str}"
 
-    # Khẳng định pipeline đã gọi đúng các lệnh Redis với tham số chuẩn xác
     pipe.incrby.assert_called_once_with(expected_key, total_tokens)
     pipe.expire.assert_called_once_with(expected_key, 172800)  # 2 days (86400 * 2)
     pipe.execute.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_x_forwarded_for_header(redis_mock):
+    client, pipe = redis_mock
+    request = make_request(
+        client=("127.0.0.1", 12345),
+        headers_extra={"x-forwarded-for": "203.0.113.195, 70.41.3.18"},
+    )
+
+    result = await verify_rate_limit_and_quota(request)
+
+    assert result == "session-123"
+
+    expected_key = "rl:203.0.113.195:session-123:2"
+    pipe.incr.assert_called_once_with(expected_key)
+
+
+@pytest.mark.asyncio
+async def test_invalid_session_id_contains_colon(redis_mock):
+    client, _ = redis_mock
+
+    request = make_request(session_id="session:malicious")
+
+    with pytest.raises(HTTPException) as exc:
+        await verify_rate_limit_and_quota(request)
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "Invalid x-session-id format."
+    client.pipeline.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_invalid_session_id_too_long(redis_mock):
+    client, _ = redis_mock
+    # session_id dài quá 128 ký tự
+    long_session_id = "a" * 129
+    request = make_request(session_id=long_session_id)
+
+    with pytest.raises(HTTPException) as exc:
+        await verify_rate_limit_and_quota(request)
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "Invalid x-session-id format."
+    client.pipeline.assert_not_called()
