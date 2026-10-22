@@ -84,3 +84,14 @@ async def _check_token_quota(client_ip: str, session_id: str):
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Exceeded daily token quota ({total_used}/{max_daily_tokens} tokens).",
         )
+
+
+async def update_token_usage(client_ip: str, session_id: str, total_tokens: int):
+    """This method is called after LLM return the usage tokens."""
+    today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
+    quota_key = f"quota:{client_ip}:{session_id}:{today_str}"
+
+    async with redis_client.pipeline() as pipe:
+        pipe.incrby(quota_key, total_tokens)
+        pipe.expire(quota_key, 86400 * 2)  # Keep the key/value for 2 days
+        await pipe.execute()

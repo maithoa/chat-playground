@@ -1,10 +1,11 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import datetime
 from fastapi import HTTPException, status
 from starlette.requests import Request
 
-from app.core.security import verify_rate_limit_and_quota
+from app.core.security import verify_rate_limit_and_quota, update_token_usage
 
 
 def make_request(*, client=("127.0.0.1", 12345), session_id="session-123"):
@@ -136,3 +137,22 @@ async def test_token_quota_within_limit(redis_mock):
     assert result == "session-123"
     pipe.execute.assert_awaited_once_with()
     client.get.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_update_token_usage(redis_mock):
+    client, pipe = redis_mock
+    total_tokens = 20
+    pipe.execute.return_value = [total_tokens, True]
+
+    # Process the function with 20 tokens
+    await update_token_usage("127.0.0.1", "session-123", total_tokens)
+
+    # Tính toán key theo đúng định dạng ngày giờ hiện tại UTC
+    today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
+    expected_key = f"quota:127.0.0.1:session-123:{today_str}"
+
+    # Khẳng định pipeline đã gọi đúng các lệnh Redis với tham số chuẩn xác
+    pipe.incrby.assert_called_once_with(expected_key, total_tokens)
+    pipe.expire.assert_called_once_with(expected_key, 172800)  # 2 days (86400 * 2)
+    pipe.execute.assert_awaited_once_with()
