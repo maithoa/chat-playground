@@ -1,14 +1,16 @@
 import json
 import inspect
 from typing import List
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from app.schemas.llm import ProviderInfo, ChatRequest
 from app.services.llm.service import LLMService
 from app.schemas.llm import StreamEventType, StreamEvent
 from loguru import logger
 
-router = APIRouter(prefix="/llm", tags=["LLM Catalog"])
+from app.core.security import verify_rate_limit_and_quota, redis_client
+
+router = APIRouter(prefix="/llm", tags=["LLM Chat"])
 
 
 @router.get("/providers", response_model=List[ProviderInfo])
@@ -18,7 +20,9 @@ async def list_providers():
 
 
 @router.post("/chat")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(
+    request: ChatRequest, session_id: str = Depends(verify_rate_limit_and_quota)
+):
     """
     Return response for client chat message and stream it back.
 
@@ -98,7 +102,10 @@ async def chat_stream(request: ChatRequest):
 
 """
 Test usage
-curl -N -X POST "http://localhost:8000/api/v1/llm/chat"   -H "Content-Type: application/json"   -d '{
+curl -N -X POST "http://localhost:8686/api/v1/llm/chat" \
+  -H "Content-Type: application/json" \
+  -H "x-session-id: 12345" \
+  -d '{
     "provider": "openrouter",
     "model": "openrouter/free",
     "messages": [
