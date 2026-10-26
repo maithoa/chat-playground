@@ -10,6 +10,7 @@ export function DuoArena() {
   const [input, setInput] = useState("");
   const [isGeneratingA, setIsGeneratingA] = useState(false);
   const [isGeneratingB, setIsGeneratingB] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // refs
   const abortControllerRefA = useRef<AbortController | null>(null);
@@ -115,6 +116,7 @@ export function DuoArena() {
       } catch (error: any) {
         if (error.name === "AbortError") {
           console.log("Stream stopped by user.");
+          setErrorMessage("Stream stopped by user.");
         } else {
           setMessages((prev) => {
             const last = prev[prev.length - 1];
@@ -124,6 +126,7 @@ export function DuoArena() {
             return prev;
           });
           console.error(`Error: ${error.message}`);
+          setErrorMessage(error.message);
         }
       } finally {
         if (timerRef.current) {
@@ -139,6 +142,7 @@ export function DuoArena() {
       }
     } catch (er: any) {
       console.error(`Error: ${er.message}`);
+      setErrorMessage(er.message);
     } finally {
       setInput("");
     }
@@ -187,7 +191,20 @@ export function DuoArena() {
           />
         </div>
       </div>
-
+      {/* Error message*/}
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg flex justify-between items-center animate-shake">
+          <span>
+            ⚠️ <strong>Error:</strong> {errorMessage}
+          </span>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="text-red-400 hover:text-red-700 font-bold text-sm px-2"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* Shared Input Area */}
       <div className="flex-shrink-0 pt-2">
         <form onSubmit={(e) => e.preventDefault()} className="space-y-2">
