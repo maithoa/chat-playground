@@ -47,7 +47,6 @@ class LLMService:
 
         if client_ip and client_device_fp:
             total_tokens = usage_data.get("total_tokens", 0)
-            logger.info("Hihi:", total_tokens)
             if total_tokens > 0:
                 await update_token_usage(
                     client_ip=client_ip,
