@@ -9,11 +9,18 @@ from app.core.security import verify_rate_limit_and_quota, update_token_usage
 
 
 def make_request(
-    *, client=("127.0.0.1", 12345), session_id="session-123", headers_extra=None
+    *,
+    client=("127.0.0.1", 12345),
+    session_id="session-123",
+    device_fp="aabbgghtyuhjgddddertyuujt",
+    headers_extra=None,
 ):
     headers = []
     if session_id is not None:
         headers.append((b"x-session-id", session_id.encode()))
+
+    if device_fp is not None:
+        headers.append((b"x-device-fp", device_fp.encode()))
 
     # Add header extra if exist in params
     if headers_extra:
@@ -61,6 +68,19 @@ async def test_missing_client(redis_mock):
 
 
 @pytest.mark.asyncio
+async def test_missing_device_fp(redis_mock):
+    client, _ = redis_mock
+    request = make_request(device_fp=None)
+
+    with pytest.raises(HTTPException) as ex:
+        await verify_rate_limit_and_quota(request)
+
+    client.pipeline.assert_not_called()
+    assert ex.value.status_code == 400
+    assert ex.value.detail == "Missing x-device-fp in header."
+
+
+@pytest.mark.asyncio
 async def test_missing_session_id(redis_mock):
     client, _ = redis_mock
     request = make_request(session_id=None)
@@ -82,9 +102,9 @@ async def test_new_counter_allows_request(redis_mock):
 
     result = await verify_rate_limit_and_quota(make_request())
 
-    assert result == "session-123"
+    assert result == "aabbgghtyuhjgddddertyuujt"
 
-    expected_key = "rl:127.0.0.1:session-123:2"
+    expected_key = "rl:127.0.0.1:aabbgghtyuhjgddddertyuujt:2"
     pipe.incr.assert_called_once_with(expected_key)
     pipe.expire.assert_called_once_with(expected_key, 65)
     pipe.execute.assert_awaited_once_with()
@@ -99,7 +119,7 @@ async def test_existing_counter_allows_request(redis_mock):
 
     result = await verify_rate_limit_and_quota(make_request())
 
-    assert result == "session-123"
+    assert result == "aabbgghtyuhjgddddertyuujt"
     pipe.execute.assert_awaited_once_with()
 
 
@@ -141,7 +161,7 @@ async def test_token_quota_within_limit(redis_mock):
 
     result = await verify_rate_limit_and_quota(make_request())
 
-    assert result == "session-123"
+    assert result == "aabbgghtyuhjgddddertyuujt"
     pipe.execute.assert_awaited_once_with()
     client.get.assert_awaited_once()
 
@@ -153,10 +173,10 @@ async def test_update_token_usage(redis_mock):
     pipe.execute.return_value = [total_tokens, True]
 
     # Process the function with 20 tokens
-    await update_token_usage("127.0.0.1", "session-123", total_tokens)
+    await update_token_usage("127.0.0.1", "aabbgghtyuhjgddddertyuujt", total_tokens)
 
     today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
-    expected_key = f"quota:127.0.0.1:session-123:{today_str}"
+    expected_key = f"quota:127.0.0.1:aabbgghtyuhjgddddertyuujt:{today_str}"
 
     pipe.incrby.assert_called_once_with(expected_key, total_tokens)
     pipe.expire.assert_called_once_with(expected_key, 172800)  # 2 days (86400 * 2)
@@ -173,9 +193,9 @@ async def test_x_forwarded_for_header(redis_mock):
 
     result = await verify_rate_limit_and_quota(request)
 
-    assert result == "session-123"
+    assert result == "aabbgghtyuhjgddddertyuujt"
 
-    expected_key = "rl:203.0.113.195:session-123:2"
+    expected_key = "rl:203.0.113.195:aabbgghtyuhjgddddertyuujt:2"
     pipe.incr.assert_called_once_with(expected_key)
 
 

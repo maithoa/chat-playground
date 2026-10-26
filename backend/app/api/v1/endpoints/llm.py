@@ -21,7 +21,7 @@ async def list_providers():
 
 @router.post("/chat")
 async def chat_stream(
-    request: ChatRequest, session_id: str = Depends(verify_rate_limit_and_quota)
+    request: ChatRequest, device_fp: str = Depends(verify_rate_limit_and_quota)
 ):
     """
     Return response for client chat message and stream it back.

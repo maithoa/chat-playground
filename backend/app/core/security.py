@@ -1,10 +1,11 @@
 import time
 import datetime
-from fastapi import APIRouter, FastAPI, Request, HTTPException, status, Depends
-from app.schemas.llm import ChatRequest
+from fastapi import Request, HTTPException, status, Depends
 import redis.asyncio as redis
 
 from loguru import logger
+
+from app.core.context import client_ip_var, session_id_var, client_device_fp_var
 
 # Init Redis connection
 redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
@@ -33,15 +34,35 @@ async def verify_rate_limit_and_quota(request: Request):
             detail="Invalid x-session-id format.",
         )
 
-    logger.info(f"Session id: {session_id}, IP: {client_ip}")
+    device_fp = request.headers.get("x-device-fp")
+    if not device_fp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing x-device-fp in header.",
+        )
 
-    await _check_rate_limit(client_ip=client_ip, session_id=session_id)
-    await _check_token_quota(client_ip=client_ip, session_id=session_id)
+    if ":" in device_fp or len(device_fp) > 128:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid x-device-fp format.",
+        )
 
-    return session_id
+    # Set value to context for later use in Service layer.
+    client_ip_var.set(client_ip)
+    session_id_var.set(session_id)
+    client_device_fp_var.set(device_fp)
+
+    logger.info(
+        f"Session id: {session_id}, IP: {client_ip}, Device fingerprint: {device_fp}"
+    )
+
+    await _check_rate_limit(client_ip=client_ip, device_fp=device_fp)
+    await _check_token_quota(client_ip=client_ip, device_fp=device_fp)
+
+    return device_fp
 
 
-async def _check_rate_limit(client_ip: str, session_id: str):
+async def _check_rate_limit(client_ip: str, device_fp: str):
     """
     Return True if within rate limit (10 requests/min.) , otherwise False
 
@@ -53,7 +74,7 @@ async def _check_rate_limit(client_ip: str, session_id: str):
     max_hourly_requests = 10
     current_time = int(time.time())
     current_window = current_time // window_seconds
-    rate_limit_key = f"rl:{client_ip}:{session_id}:{current_window}"
+    rate_limit_key = f"rl:{client_ip}:{device_fp}:{current_window}"
 
     try:
         async with redis_client.pipeline() as pipe:
@@ -72,7 +93,7 @@ async def _check_rate_limit(client_ip: str, session_id: str):
         )
 
 
-async def _check_token_quota(client_ip: str, session_id: str):
+async def _check_token_quota(client_ip: str, device_fp: str):
     """
     Return True if within usage limit  per day (eg 5000 total token used/day.) , otherwise False
 
@@ -82,7 +103,7 @@ async def _check_token_quota(client_ip: str, session_id: str):
     """
     max_daily_tokens = 5000
     today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
-    quota_key = f"quota:{client_ip}:{session_id}:{today_str}"
+    quota_key = f"quota:{client_ip}:{device_fp}:{today_str}"
 
     # Get total token used per day
     current_tokens = await redis_client.get(quota_key)
@@ -96,7 +117,7 @@ async def _check_token_quota(client_ip: str, session_id: str):
         )
 
 
-async def update_token_usage(client_ip: str, session_id: str, total_tokens: int):
+async def update_token_usage(client_ip: str, device_fp: str, total_tokens: int):
     """This method is called after LLM return the usage tokens."""
 
     if not isinstance(total_tokens, int) or total_tokens < 0:
@@ -104,7 +125,7 @@ async def update_token_usage(client_ip: str, session_id: str, total_tokens: int)
         raise ValueError("total_tokens must be a non-negative integer.")
 
     today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
-    quota_key = f"quota:{client_ip}:{session_id}:{today_str}"
+    quota_key = f"quota:{client_ip}:{device_fp}:{today_str}"
 
     async with redis_client.pipeline() as pipe:
         pipe.incrby(quota_key, total_tokens)

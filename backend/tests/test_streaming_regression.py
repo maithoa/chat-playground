@@ -119,6 +119,7 @@ async def test_streaming_disconnect_handling():
         "headers": [
             (b"content-type", b"application/json"),
             (b"x-session-id", b"34567"),
+            (b"x-device-fp", b"abcde"),
         ],
         "client": ("127.0.0.1", 12345),
         "server": ("test", 80),
@@ -252,7 +253,7 @@ async def test_exception_leakage_and_credential_safety(client: AsyncClient):
     Verify no internal exception details, tracebacks, or credentials are leaked to clients.
     Simulates an internal deep-layer service failure containing sensitive data.
     """
-    headers = {"x-session-id": "12345"}
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
     payload = {
         "provider": "groq",
         "model": "openai/gpt-oss-120b",
@@ -317,7 +318,7 @@ async def test_endpoint_accepts_empty_stream(client: AsyncClient):
         if False:
             yield  # empty generator yielding nothing
 
-    headers = {"x-session-id": "12345"}
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
 
     payload = {
         "provider": "groq",

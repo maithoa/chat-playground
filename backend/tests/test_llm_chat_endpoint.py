@@ -129,7 +129,7 @@ def test_chat_stream_success():
     test collects those lines, decodes the JSON payload and asserts the content
     matches the mocked generator output.
     """
-    headers = {"x-session-id": "12345"}
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
 
     payload = {
         "provider": "testprovider",
@@ -179,7 +179,7 @@ def test_chat_stream_success():
 
 def test_chat_stream_invalid_provider():
     """Request with an unknown provider should raise a 400 error."""
-    headers = {"x-session-id": "12345"}
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
     payload = {
         "provider": "unknown",
         "model": "testmodel",
@@ -193,7 +193,7 @@ def test_chat_stream_invalid_provider():
 
 def test_chat_stream_invalid_model():
     """Request with an unknown model for a valid provider should raise 400."""
-    headers = {"x-session-id": "12345"}
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
     payload = {
         "provider": "testprovider",
         "model": "unknownmodel",
@@ -220,7 +220,7 @@ async def test_chat_disconnect_from_client_cleans_up_service_stream():
         finally:
             stream_closed.set()
 
-    headers = {"x-session-id": "12345"}
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
     payload = {
         "provider": "testprovider",
         "model": "testmodel",
@@ -262,8 +262,9 @@ async def test_chat_disconnect_from_client_cleans_up_service_stream():
         "headers": [
             (b"content-type", b"application/json"),
             (b"x-session-id", b"12345"),
+            (b"x-device-fp", b"acbde"),
         ],
-        "client": ("127.0.0.1", 12345),
+        "client": ("127.0.0.1", 123456),
         "server": ("test", 80),
     }
 
@@ -314,7 +315,7 @@ async def test_chat_closes_service_stream_when_closed_early():
         "app.services.llm.service.LLMService.stream_chat",
         side_effect=fake_service_stream,
     ):
-        response = await chat_stream(request=request, session_id="12345")
+        response = await chat_stream(request=request, device_fp="abcde")
         api_stream = response.body_iterator
 
         try:
@@ -359,7 +360,7 @@ def test_chat_rate_limit_exceeded(mock_redis):
 
     with patch("app.services.llm.service.LLMService.stream_chat") as mock_stream:
         response = _post_chat(
-            headers={"x-session-id": "12345"},
+            headers={"x-session-id": "12345", "x-device-fp": "abcde"},
             payload=payload,
         )
 
