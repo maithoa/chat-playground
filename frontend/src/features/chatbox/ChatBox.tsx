@@ -3,6 +3,7 @@ import { streamChat } from "@/services/llmService";
 import type { Message } from "@/types/chat";
 import { SendMsgToModel } from "@/components/Button/SendMsgToModel/SendMsgToModel";
 import { StreamWindow } from "@/components/Module/StreamWindow";
+import { ErrorMessage } from "@/components/ErrorMessage";
 
 export function ChatBox() {
   // ui state
@@ -145,19 +146,7 @@ export function ChatBox() {
     <div className="flex flex-col h-full w-full max-w-3xl p-4 overflow-hidden">
       <StreamWindow messages={messages} isGenerating={isGenerating} onStop={handleStop} />
       {/* Error message*/}
-      {errorMessage && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg flex justify-between items-center animate-shake">
-          <span>
-            ⚠️ <strong>Error:</strong> {errorMessage}
-          </span>
-          <button
-            onClick={() => setErrorMessage(null)}
-            className="text-red-400 hover:text-red-700 font-bold text-sm px-2"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      <ErrorMessage message={errorMessage} onClose={() => setErrorMessage(null)} />
       <div className="flex-shrink-0 space-y-2 pt-2">
         {/* Input & Action Area */}
         <form onSubmit={(e) => e.preventDefault()} className="space-y-2">

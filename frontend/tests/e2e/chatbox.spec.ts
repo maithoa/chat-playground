@@ -83,4 +83,37 @@ test.describe("ChatBox Feature E2E Test Suite", () => {
     // Xác thực input được mở khóa sau khi hoàn tất
     await expect(textarea).toHaveValue("");
   });
+
+  /**
+   - Test case 4: [Error Flow] Verify error banner is displayed
+   - when backend returns a 429 error (Daily token limit exceeded).
+   */
+  test("4. [Error Flow] Display error message banner when hitting token limit", async ({
+    page,
+  }) => {
+    // Intercept chat endpoint và ép trả về lỗi 429 Too Many Requests
+    await page.route("**/llm/chat", async (route) => {
+      await route.fulfill({
+        status: 429,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Daily token limit exceeded" }),
+      });
+    });
+
+    const textarea = page.locator("textarea");
+    await textarea.fill("Tell me a long story");
+
+    // const submitButton = page.locator('button[type="submit"]');
+    const submitButton = page.locator('button[type="submit"]');
+    await submitButton.click();
+
+    // 👉 Xác thực component ErrorMessage hiển thị đúng nội dung lỗi từ backend
+    await expect(page.getByText(/Error: Daily token limit exceeded/i)).toBeVisible({
+      timeout: 10000,
+    });
+
+    // (Tùy chọn) Kiểm tra có nút đóng (✕) hoặc người dùng có thể click ẩn lỗi đi
+    // const closeButton = page.locator('button[aria-label="Close error"]');
+    // await expect(closeButton).toBeVisible();
+  });
 });
