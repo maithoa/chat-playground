@@ -4,6 +4,7 @@ import type { Message } from "@/types/chat";
 import { SendMsgToModel } from "@/components/Button/SendMsgToModel/SendMsgToModel";
 import { StreamWindow } from "@/components/Module/StreamWindow";
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { TokensConsumptionProgress } from "@/components/Button/TokensConsumptionProgress";
 
 export function ChatBox() {
   // ui state
@@ -11,6 +12,9 @@ export function ChatBox() {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [dailyTokenUsed, setDailyTokenUsed] = useState<number>(() => {
+    return Number(localStorage.getItem("daily_tokens_used")) || 0;
+  });
 
   // refs
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -51,6 +55,12 @@ export function ChatBox() {
     });
   };
 
+  const updateDailyTokens = (consumed: number) => {
+    const newTotal = dailyTokenUsed + consumed;
+    setDailyTokenUsed(newTotal);
+    localStorage.setItem("daily_tokens_used", newTotal.toString());
+  };
+
   const handleSubmit = async (providerId: string, modelId: string) => {
     if (!input.trim() || isGenerating) return;
 
@@ -83,6 +93,9 @@ export function ChatBox() {
         onUsageComplete: (usage) => {
           // flush last part of the chunks
           flushBuffer();
+
+          // update daily used tokens
+          updateDailyTokens(usage.total_tokens);
 
           setMessages((prev) => {
             const last = prev[prev.length - 1];
@@ -147,6 +160,7 @@ export function ChatBox() {
       <StreamWindow messages={messages} isGenerating={isGenerating} onStop={handleStop} />
       {/* Error message*/}
       <ErrorMessage message={errorMessage} onClose={() => setErrorMessage(null)} />
+      <TokensConsumptionProgress used={dailyTokenUsed} />
       <div className="flex-shrink-0 space-y-2 pt-2">
         {/* Input & Action Area */}
         <form onSubmit={(e) => e.preventDefault()} className="space-y-2">
