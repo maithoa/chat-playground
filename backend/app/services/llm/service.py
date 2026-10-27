@@ -5,7 +5,7 @@ from .openrouter_handler import OpenRouterHandler
 from .groq_handler import GroqHandler
 from .google_handler import GoogleHandler
 from .catalog import PROVIDERS_CATALOG
-from app.schemas.llm import ProviderInfo, ModelInfo
+from app.schemas.llm import ProviderInfo, UserUsage
 from loguru import logger
 from app.schemas.llm import StreamEvent, StreamEventType
 import asyncio
@@ -38,7 +38,7 @@ class LLMService:
         ]
 
     @classmethod
-    async def on_usage_complete(cls, usage_data: Dict[str, Any]):
+    async def on_usage_complete(usage_data: Dict[str, Any]):
         # This method can be used to handle usage data, e.g., logging or storing it.
         # For now, we just print it. In a real application, you might want to store it in a database.
         # Update usage data into Redis for later checking the quota
@@ -53,6 +53,11 @@ class LLMService:
                     device_fp=client_device_fp,
                     total_tokens=total_tokens,
                 )
+        else:
+            logger.error(
+                "Could not find client_ip: {client_ip} and client device fingerprint: {client_device_fp} in Redis."
+            )
+            raise ValueError("Invalid Client information.")
 
         logger.info(f"LLM Service--Record--Usage data: {usage_data}")
 

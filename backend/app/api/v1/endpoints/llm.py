@@ -1,14 +1,18 @@
 import json
 import inspect
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
-from app.schemas.llm import ProviderInfo, ChatRequest
+from app.schemas.llm import ProviderInfo, ChatRequest, UserUsage
 from app.services.llm.service import LLMService
 from app.schemas.llm import StreamEventType, StreamEvent
 from loguru import logger
 
-from app.core.security import verify_rate_limit_and_quota
+from app.core.security import (
+    verify_rate_limit_and_quota,
+    get_user_usage_data,
+    extract_client_context,
+)
 
 router = APIRouter(prefix="/llm", tags=["LLM Chat"])
 
@@ -38,6 +42,21 @@ async def chat_stream(
 
     Yields:
         chunk of llm's response.
+
+    Test usage
+    curl -N -X POST "http://localhost:8686/api/v1/llm/chat" \
+    -H "Content-Type: application/json" \
+    -H "x-session-id: 12345" \
+    -H "x-device-fp: test-device-fingerprint-123" \
+    -d '{
+        "provider": "openrouter",
+        "model": "openrouter/free",
+        "messages": [
+        {"role": "system", "content": "You are a helpful assistant with short, accurate communicate style"},
+        {"role": "user", "content": "What is the shape of the globe?"}
+        ]
+    }'
+
     """
     # Validate if LLM Provider info is accurate and supported by the app
     llm_providers = LLMService.get_llm_providers()
@@ -100,17 +119,17 @@ async def chat_stream(
     )
 
 
-"""
-Test usage
-curl -N -X POST "http://localhost:8686/api/v1/llm/chat" \
-  -H "Content-Type: application/json" \
-  -H "x-session-id: 12345" \
-  -d '{
-    "provider": "openrouter",
-    "model": "openrouter/free",
-    "messages": [
-      {"role": "system", "content": "You are a helpful assistant with short, accurate communicate style"},
-      {"role": "user", "content": "What is the shape of the globe?"}
-    ]
-  }'
-"""
+@router.get("/userUsage", response_model=UserUsage)
+async def get_user_usage(
+    request: Request, device_fp: str = Depends(extract_client_context)
+):
+    """Return a json of UserUsage
+    Test usage:
+        curl -X GET "http://localhost:8686/api/v1/llm/userUsage" \
+        -H "x-session-id: 12345" \
+        -H "x-device-fp: test-device-fingerprint-123"
+    """
+
+    result = await get_user_usage_data()
+
+    return result
