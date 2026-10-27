@@ -2,6 +2,7 @@ import time
 import datetime
 from fastapi import Request, HTTPException, status, Depends
 import redis.asyncio as redis
+import asyncio
 
 from loguru import logger
 
@@ -107,18 +108,34 @@ async def _check_token_quota(client_ip: str, device_fp: str):
         session_id: Sessions from Client
     """
     max_daily_tokens = settings.USER_MAX_DAILY_TOKENS
+    max_ip_tokens = max_daily_tokens * 2
+
     today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
     quota_key = f"quota:{client_ip}:{device_fp}:{today_str}"
+    ip_key = f"quota:ip:{client_ip}:{today_str}"
 
     # Get total token used per day
-    current_tokens = await redis_client.get(quota_key)
-    total_used = int(current_tokens) if current_tokens else 0
+    device_tokens_res, ip_tokens_res = await asyncio.gather(
+        redis_client.get(quota_key), redis_client.get(ip_key)
+    )
+
+    total_used = int(device_tokens_res) if device_tokens_res else 0
 
     if total_used >= max_daily_tokens:
         logger.info("Exceeded limit of max token used per day.")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Exceeded daily token quota ({total_used}/{max_daily_tokens} tokens).",
+        )
+
+    # One more round check for ip address
+    current_ip_tokens_used = int(ip_tokens_res) if ip_tokens_res else 0
+
+    if current_ip_tokens_used >= max_ip_tokens:
+        logger.info("Exceeded limit of max token used per day for this IP address.")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Exceeded daily token quota for IP address ({current_ip_tokens_used}/{max_ip_tokens} tokens).",
         )
 
     return total_used
@@ -133,10 +150,15 @@ async def update_token_usage(client_ip: str, device_fp: str, total_tokens: int):
 
     today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
     quota_key = f"quota:{client_ip}:{device_fp}:{today_str}"
+    ip_key = f"quota:ip:{client_ip}:{today_str}"
 
     async with redis_client.pipeline() as pipe:
         pipe.incrby(quota_key, total_tokens)
         pipe.expire(quota_key, 86400 * 2)  # Keep the key/value for 2 days
+
+        pipe.incrby(ip_key, total_tokens)
+        pipe.expire(ip_key, 86400 * 2)  # Keep the key/value for 2 days
+
         await pipe.execute()
 
 
@@ -151,11 +173,22 @@ async def get_user_usage_data():
             detail="Missing context data.",
         )
 
-    r_token_used = await _check_token_quota(client_ip, device_fp)
-    token_used = int(r_token_used) if r_token_used else 0
+    today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
+    quota_key = f"quota:{client_ip}:{device_fp}:{today_str}"
+    device_token_res = await redis_client.get(quota_key)
 
-    r_hourly_requests = await _check_rate_limit(client_ip, device_fp)
-    hourly_requests = int(r_hourly_requests) if r_hourly_requests else 0
+    # Get total token used per day
+    token_used = int(device_token_res) if device_token_res else 0
+
+    # Get hourly requests sent
+    window_seconds = 60
+    max_reqs_pm = settings.USER_MAX_REQS_PER_MIN
+    current_time = int(time.time())
+    current_window = current_time // window_seconds
+    rate_limit_key = f"rl:{client_ip}:{device_fp}:{current_window}"
+    hourly_requests_res = await redis_client.get(rate_limit_key)
+
+    hourly_requests = int(hourly_requests_res) if hourly_requests_res else 0
 
     user_usage = {
         "device_fp": device_fp,
@@ -164,7 +197,7 @@ async def get_user_usage_data():
         "max_daily_tokens": settings.USER_MAX_DAILY_TOKENS,
         "max_hourly_requests": settings.USER_MAX_REQS_PER_MIN,
     }
-    logger.info("User usage", user_usage)
+    logger.info("user_usage", user_usage)
     return user_usage
 
 
