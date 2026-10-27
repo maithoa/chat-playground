@@ -2,11 +2,11 @@ import React, { useEffect, useState } from "react";
 import { getUserUsage } from "@/services/llmService";
 
 export interface TokensConsumptionProgressProps {
-  used?: number;
+  refreshTrigger?: number;
 }
 
 export const TokensConsumptionProgress: React.FC<TokensConsumptionProgressProps> = ({
-  used: externalUsed,
+  refreshTrigger = 0,
 }) => {
   // component props
   const [internalTokenUsed, setInternalTokenUsed] = useState<number>(0);
@@ -14,28 +14,26 @@ export const TokensConsumptionProgress: React.FC<TokensConsumptionProgressProps>
 
   // Fetch backend api to find out the token used and max allowed for the current device based on ip, device information and datetime
   useEffect(() => {
-    if (externalUsed === undefined) {
-      async function fetchUserUsage() {
-        try {
-          const userUsage = await getUserUsage();
-          if (userUsage) {
-            if (typeof userUsage.tokens_used === "number") {
-              setInternalTokenUsed(userUsage.tokens_used);
-            }
-            if (typeof userUsage.max_daily_tokens === "number") {
-              setMax(userUsage.max_daily_tokens);
-            }
+    async function fetchUserUsage() {
+      try {
+        const userUsage = await getUserUsage();
+        if (userUsage) {
+          if (typeof userUsage.tokens_used === "number") {
+            setInternalTokenUsed(userUsage.tokens_used);
           }
-        } catch (e) {
-          console.log("Error getting user's daily usage data:", e);
-          throw Error("Could not fetch user's daily usage data.");
+          if (typeof userUsage.max_daily_tokens === "number") {
+            setMax(userUsage.max_daily_tokens);
+          }
         }
+      } catch (e) {
+        console.log("Error getting user's daily usage data:", e);
+        throw Error("Could not fetch user's daily usage data.");
       }
-      fetchUserUsage();
     }
-  }, [externalUsed]);
+    fetchUserUsage();
+  }, [refreshTrigger]);
 
-  const currentUsed = externalUsed != undefined ? externalUsed : internalTokenUsed;
+  const currentUsed = internalTokenUsed;
 
   const percentage = Math.min(Math.max((currentUsed / max) * 100, 0), 100);
   const isAlmostEmpty = percentage >= 80;
@@ -43,7 +41,7 @@ export const TokensConsumptionProgress: React.FC<TokensConsumptionProgressProps>
   return (
     <div className="w-full bg-gray-100 p-3 rounded-lg border border-gray-200 shadow-sm">
       <div className="flex justify-between text-xs font-semibold text-gray-600 mb-1">
-        <span>Daily token used</span>
+        <span>Your daily token used</span>
         <span className={isAlmostEmpty ? "text-red-600 font-bold" : "text-gray-800"}>
           {currentUsed.toLocaleString()} / {max.toLocaleString()} tokens
         </span>

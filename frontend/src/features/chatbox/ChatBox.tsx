@@ -12,6 +12,7 @@ export function ChatBox() {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [refeshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // refs
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -85,6 +86,9 @@ export function ChatBox() {
           // flush last part of the chunks
           flushBuffer();
 
+          // set refresh trigger so that token daily usage progress bar is refreshed
+          setRefreshTrigger((prev) => prev + 1);
+
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (!last || last.role !== "assistant") return prev;
@@ -148,7 +152,7 @@ export function ChatBox() {
       <StreamWindow messages={messages} isGenerating={isGenerating} onStop={handleStop} />
       {/* Error message*/}
       <ErrorMessage message={errorMessage} onClose={() => setErrorMessage(null)} />
-      <TokensConsumptionProgress />
+      <TokensConsumptionProgress refreshTrigger={refeshTrigger} />
       <div className="flex-shrink-0 space-y-2 pt-2">
         {/* Input & Action Area */}
         <form onSubmit={(e) => e.preventDefault()} className="space-y-2">

@@ -86,7 +86,7 @@ export const ConversationTokenCounter: React.FC<ConversationTokenCounterProps> =
       />
 
       <div className="flex items-center gap-1.5">
-        <span className="text-gray-500">Total Tokens:</span>
+        <span className="text-gray-500">Tokens used in current chat:</span>
         <span className="font-bold text-gray-800 tabular-nums">
           {tokenStats.totalTokens.toLocaleString()}
         </span>
