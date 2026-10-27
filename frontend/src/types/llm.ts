@@ -37,3 +37,11 @@ export interface DualModelArenaState {
   streamA: SingleStreamState;
   streamB: SingleStreamState;
 }
+
+export interface UserUsage {
+  device_fp: string;
+  tokens_used: number;
+  requests_used: number;
+  max_daily_tokens: number;
+  max_hourly_requests: number;
+}

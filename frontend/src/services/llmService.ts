@@ -1,6 +1,7 @@
 import type { StreamChatParams } from "@/types/chat";
 import { env } from "@/config/env";
 import { getSessionId, getDeviceFingerprint } from "./commonService";
+import type { UserUsage } from "@/types/llm";
 
 export async function streamChat({
   provider,
@@ -75,10 +76,11 @@ export async function streamChat({
 
       // end signal from backend
       if (dataStr === "[DONE]") return;
-      console.log("-----DEBUG---- dataStr:", { dataStr });
+
       // Parse Server Stream payload
       try {
         const parsed = JSON.parse(dataStr);
+        console.log("-----DEBUG---- dataStr:", { parsed });
         if (parsed.error) {
           throw new Error(parsed.error);
         }
@@ -94,4 +96,39 @@ export async function streamChat({
       }
     }
   }
+}
+
+export async function getUserUsage(): Promise<UserUsage> {
+  const beEndpoint = `${env.API_BASE_URL}/llm/userUsage`;
+
+  const device_ip = await getDeviceFingerprint();
+
+  let response: Response;
+  try {
+    response = await fetch(beEndpoint, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "x-session-id": getSessionId(),
+        "x-device-fp": device_ip,
+      },
+    });
+  } catch (networkError) {
+    console.error("Network error:", networkError);
+    throw new Error("Cannot connect to server, please try again later.");
+  }
+
+  // Check response
+  if (!response.ok) {
+    let errorDetail = "Unknown error";
+    try {
+      const errorData = await response.json();
+      errorDetail = errorData.detail || errorDetail;
+    } catch (error) {
+      errorDetail = `Error: ${response.status}:${response.statusText}`;
+    }
+    throw new Error(errorDetail);
+  }
+
+  return await response.json();
 }
