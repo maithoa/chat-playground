@@ -37,7 +37,7 @@ class LLMService:
             if provider_id in cls._handlers
         ]
 
-    @classmethod
+    @staticmethod
     async def on_usage_complete(usage_data: Dict[str, Any]):
         # This method can be used to handle usage data, e.g., logging or storing it.
         # For now, we just print it. In a real application, you might want to store it in a database.
