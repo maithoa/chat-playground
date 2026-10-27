@@ -1,15 +1,43 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { getUserUsage } from "@/services/llmService";
 
 export interface TokensConsumptionProgressProps {
-  used: number;
-  max?: number;
+  used?: number;
 }
 
 export const TokensConsumptionProgress: React.FC<TokensConsumptionProgressProps> = ({
-  used,
-  max = 5000,
+  used: externalUsed,
 }) => {
-  const percentage = Math.min(Math.max((used / max) * 100, 0), 100);
+  // component props
+  const [internalTokenUsed, setInternalTokenUsed] = useState<number>(0);
+  const [max, setMax] = useState<number>(5000);
+
+  // Fetch backend api to find out the token used and max allowed for the current device based on ip, device information and datetime
+  useEffect(() => {
+    if (externalUsed === undefined) {
+      async function fetchUserUsage() {
+        try {
+          const userUsage = await getUserUsage();
+          if (userUsage) {
+            if (typeof userUsage.tokens_used === "number") {
+              setInternalTokenUsed(userUsage.tokens_used);
+            }
+            if (typeof userUsage.max_daily_tokens === "number") {
+              setMax(userUsage.max_daily_tokens);
+            }
+          }
+        } catch (e) {
+          console.log("Error getting user's daily usage data:", e);
+          throw Error("Could not fetch user's daily usage data.");
+        }
+      }
+      fetchUserUsage();
+    }
+  }, [externalUsed]);
+
+  const currentUsed = externalUsed != undefined ? externalUsed : internalTokenUsed;
+
+  const percentage = Math.min(Math.max((currentUsed / max) * 100, 0), 100);
   const isAlmostEmpty = percentage >= 80;
 
   return (
@@ -17,7 +45,7 @@ export const TokensConsumptionProgress: React.FC<TokensConsumptionProgressProps>
       <div className="flex justify-between text-xs font-semibold text-gray-600 mb-1">
         <span>Daily token used</span>
         <span className={isAlmostEmpty ? "text-red-600 font-bold" : "text-gray-800"}>
-          {used.toLocaleString()} / {max.toLocaleString()} tokens
+          {currentUsed.toLocaleString()} / {max.toLocaleString()} tokens
         </span>
       </div>
 
