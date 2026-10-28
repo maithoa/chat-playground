@@ -36,6 +36,23 @@ def mock_llm_providers():
         yield
 
 
+@pytest.fixture(autouse=True)
+def mock_redis():
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.execute = AsyncMock(return_value=[1, True])
+
+    mock_pipeline.__aenter__ = AsyncMock(return_value=mock_pipeline)
+    mock_pipeline.__aexit__ = AsyncMock(return_value=None)
+
+    redis_client = MagicMock()
+    redis_client.pipeline.return_value = mock_pipeline
+    redis_client.get = AsyncMock(return_value=None)
+
+    with patch("app.core.security.redis_client", new=redis_client):
+        yield redis_client
+
+
 # ==========================================
 # GROUP 1: LLM Streaming, Disconnects & Timeouts
 # ==========================================
@@ -99,7 +116,11 @@ async def test_streaming_disconnect_handling():
         "raw_path": b"/api/v1/llm/chat",
         "query_string": b"",
         "root_path": "",
-        "headers": [(b"content-type", b"application/json")],
+        "headers": [
+            (b"content-type", b"application/json"),
+            (b"x-session-id", b"34567"),
+            (b"x-device-fp", b"abcde"),
+        ],
         "client": ("127.0.0.1", 12345),
         "server": ("test", 80),
     }
@@ -232,6 +253,7 @@ async def test_exception_leakage_and_credential_safety(client: AsyncClient):
     Verify no internal exception details, tracebacks, or credentials are leaked to clients.
     Simulates an internal deep-layer service failure containing sensitive data.
     """
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
     payload = {
         "provider": "groq",
         "model": "openai/gpt-oss-120b",
@@ -249,7 +271,9 @@ async def test_exception_leakage_and_credential_safety(client: AsyncClient):
         "app.services.llm.service.LLMService.stream_chat",
         return_value=failing_generator(),
     ):
-        async with client.stream("POST", "/api/v1/llm/chat", json=payload) as response:
+        async with client.stream(
+            "POST", "/api/v1/llm/chat", headers=headers, json=payload
+        ) as response:
             assert response.status_code == 200
             response_body = ""
             async for chunk in response.aiter_text():
@@ -294,6 +318,8 @@ async def test_endpoint_accepts_empty_stream(client: AsyncClient):
         if False:
             yield  # empty generator yielding nothing
 
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
+
     payload = {
         "provider": "groq",
         "model": "openai/gpt-oss-120b",
@@ -304,5 +330,5 @@ async def test_endpoint_accepts_empty_stream(client: AsyncClient):
         "app.services.llm.service.LLMService.stream_chat",
         return_value=empty_generator(),
     ):
-        response = await client.post("/api/v1/llm/chat", json=payload)
+        response = await client.post("/api/v1/llm/chat", headers=headers, json=payload)
         assert response.status_code == 200

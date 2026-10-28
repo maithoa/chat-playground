@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { StreamWindow } from "@/components/Module/StreamWindow";
 import { streamChat } from "@/services/llmService";
 import type { Message } from "@/types/chat";
+import { ErrorMessage } from "@/components/ErrorMessage";
+import { useUsageContext } from "@/context/UsageContext";
 
 export function DuoArena() {
   //ui state
@@ -10,6 +12,9 @@ export function DuoArena() {
   const [input, setInput] = useState("");
   const [isGeneratingA, setIsGeneratingA] = useState(false);
   const [isGeneratingB, setIsGeneratingB] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const userUsageContext = useUsageContext();
 
   // refs
   const abortControllerRefA = useRef<AbortController | null>(null);
@@ -100,9 +105,12 @@ export function DuoArena() {
             // only add chunk to buffer
             streamingBufferRef.current += chunk;
           },
-          onUsageComplete: (usage) => {
+          onUsageComplete: async (usage) => {
             // flush last part of the chunks
             flushBuffer(setMessages, streamingBufferRef);
+
+            // Trigger daily tokens used bar update.
+            await userUsageContext.refreshUsage();
 
             setMessages((prev) => {
               const last = prev[prev.length - 1];
@@ -115,6 +123,7 @@ export function DuoArena() {
       } catch (error: any) {
         if (error.name === "AbortError") {
           console.log("Stream stopped by user.");
+          setErrorMessage("Stream stopped by user.");
         } else {
           setMessages((prev) => {
             const last = prev[prev.length - 1];
@@ -124,6 +133,7 @@ export function DuoArena() {
             return prev;
           });
           console.error(`Error: ${error.message}`);
+          setErrorMessage(error.message);
         }
       } finally {
         if (timerRef.current) {
@@ -139,6 +149,7 @@ export function DuoArena() {
       }
     } catch (er: any) {
       console.error(`Error: ${er.message}`);
+      setErrorMessage(er.message);
     } finally {
       setInput("");
     }
@@ -187,7 +198,7 @@ export function DuoArena() {
           />
         </div>
       </div>
-
+      <ErrorMessage message={errorMessage} onClose={() => setErrorMessage(null)} />
       {/* Shared Input Area */}
       <div className="flex-shrink-0 pt-2">
         <form onSubmit={(e) => e.preventDefault()} className="space-y-2">

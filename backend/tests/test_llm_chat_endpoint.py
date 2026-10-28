@@ -16,7 +16,7 @@ from typing import AsyncGenerator, List
 
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 import asyncio
 
 from app.main import app
@@ -47,7 +47,7 @@ def _dummy_provider() -> List[ProviderInfo]:
     return [provider]
 
 
-async def _mock_stream_chat(*_args, **_kwargs) -> AsyncGenerator[str, None]:
+async def _mock_stream_chat(*_args, **_kwargs) -> AsyncGenerator[StreamEvent, None]:
     """Async generator yielding a couple of deterministic chunks.
 
     The real implementation yields strings that represent the LLM response.  For
@@ -86,20 +86,40 @@ def _mock_llm_service():
         # production code to remain a simple ``async for`` loop.
         with patch(
             "app.services.llm.service.LLMService.stream_chat",
-            new=MagicMock(return_value=_mock_stream_chat()),
+            side_effect=_mock_stream_chat,
         ):
             yield
 
 
-def _post_chat(payload: dict):
+@pytest.fixture(autouse=True)
+def mock_redis():
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.execute = AsyncMock(return_value=[1, True])
+
+    mock_pipeline.__aenter__ = AsyncMock(return_value=mock_pipeline)
+    mock_pipeline.__aexit__ = AsyncMock(return_value=None)
+
+    redis_client = MagicMock()
+    redis_client.pipeline.return_value = mock_pipeline
+
+    redis_client.get = AsyncMock(return_value=None)
+
+    with patch("app.core.security.redis_client", new=redis_client):
+        yield redis_client
+
+
+def _post_chat(headers: dict, payload: dict):
     """Helper to POST to the chat endpoint using the test client.
 
     ``TestClient`` returns a ``Response`` object that already provides an
     ``iter_lines`` iterator for streamed responses. No ``stream`` argument is
     required (or supported) on ``client.post``.
     """
-
-    return client.post("/api/v1/llm/chat", json=payload)
+    if headers is not None:
+        return client.post("/api/v1/llm/chat", headers=headers, json=payload)
+    else:
+        return client.post("/api/v1/llm/chat", json=payload)
 
 
 def test_chat_stream_success():
@@ -109,6 +129,7 @@ def test_chat_stream_success():
     test collects those lines, decodes the JSON payload and asserts the content
     matches the mocked generator output.
     """
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
 
     payload = {
         "provider": "testprovider",
@@ -116,7 +137,7 @@ def test_chat_stream_success():
         "messages": [],
         "temperature": 0.7,
     }
-    response = _post_chat(payload)
+    response = _post_chat(headers, payload)
 
     assert response.status_code == 200
     # FastAPI returns ``application/json`` for normal responses, but streaming
@@ -158,28 +179,28 @@ def test_chat_stream_success():
 
 def test_chat_stream_invalid_provider():
     """Request with an unknown provider should raise a 400 error."""
-
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
     payload = {
         "provider": "unknown",
         "model": "testmodel",
         "messages": [],
         "temperature": 0.7,
     }
-    response = _post_chat(payload)
+    response = _post_chat(headers, payload)
     assert response.status_code == 400
     assert "Provider 'unknown' is not supported" in response.json()["detail"]
 
 
 def test_chat_stream_invalid_model():
     """Request with an unknown model for a valid provider should raise 400."""
-
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
     payload = {
         "provider": "testprovider",
         "model": "unknownmodel",
         "messages": [],
         "temperature": 0.7,
     }
-    response = _post_chat(payload)
+    response = _post_chat(headers, payload)
     assert response.status_code == 400
     assert "Model 'unknownmodel' is not supported" in response.json()["detail"]
 
@@ -199,6 +220,7 @@ async def test_chat_disconnect_from_client_cleans_up_service_stream():
         finally:
             stream_closed.set()
 
+    headers = {"x-session-id": "12345", "x-device-fp": "abcde"}
     payload = {
         "provider": "testprovider",
         "model": "testmodel",
@@ -237,8 +259,12 @@ async def test_chat_disconnect_from_client_cleans_up_service_stream():
         "path": "/api/v1/llm/chat",
         "query_string": b"",
         "root_path": "",
-        "headers": [(b"content-type", b"application/json")],
-        "client": ("127.0.0.1", 12345),
+        "headers": [
+            (b"content-type", b"application/json"),
+            (b"x-session-id", b"12345"),
+            (b"x-device-fp", b"acbde"),
+        ],
+        "client": ("127.0.0.1", 123456),
         "server": ("test", 80),
     }
 
@@ -289,7 +315,7 @@ async def test_chat_closes_service_stream_when_closed_early():
         "app.services.llm.service.LLMService.stream_chat",
         side_effect=fake_service_stream,
     ):
-        response = await chat_stream(request=request)
+        response = await chat_stream(request=request, device_fp="abcde")
         api_stream = response.body_iterator
 
         try:
@@ -301,3 +327,45 @@ async def test_chat_closes_service_stream_when_closed_early():
             await api_stream.aclose()
 
         assert service_closed is True
+
+
+def test_chat_missing_session_id(mock_redis):
+    payload = {
+        "provider": "testprovider",
+        "model": "testmodel",
+        "messages": [],
+        "temperature": 0.7,
+    }
+
+    with patch("app.services.llm.service.LLMService.stream_chat") as mock_stream:
+        response = _post_chat(headers=None, payload=payload)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == ("Missing x-session-id in header.")
+
+    mock_redis.pipeline.assert_not_called()
+    mock_stream.assert_not_called()
+
+
+def test_chat_rate_limit_exceeded(mock_redis):
+    pipe = mock_redis.pipeline.return_value
+    pipe.execute.return_value = [11, True]
+
+    payload = {
+        "provider": "testprovider",
+        "model": "testmodel",
+        "messages": [],
+        "temperature": 0.7,
+    }
+
+    with patch("app.services.llm.service.LLMService.stream_chat") as mock_stream:
+        response = _post_chat(
+            headers={"x-session-id": "12345", "x-device-fp": "abcde"},
+            payload=payload,
+        )
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == ("Exceeded limit of 10 requests/min.")
+
+    pipe.execute.assert_awaited_once_with()
+    mock_stream.assert_not_called()

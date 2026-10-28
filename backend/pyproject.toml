@@ -21,6 +21,7 @@ dependencies = [
     "google-genai>=2.25.0",
     "sqlalchemy[asyncio]>=2.0.0",
     "loguru>=0.7.0",
+    "redis>=8.1.0",
 ]
 
 [project.optional-dependencies]
