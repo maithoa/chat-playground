@@ -59,6 +59,12 @@ chat-playground/
   * **End-to-End Tests:** Playwright
 * **CI/CD:** GitHub Actions
 
+## Screenshots
+![alt text](docs/asset/image-chat.png)
+![alt text](docs/asset/image-model-selection.png)
+![alt text](<docs/asset/image -duoarena.png>)
+
+
 ## 🚀 Local Development Setup
 
 ### Prerequisites
