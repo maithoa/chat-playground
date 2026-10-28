@@ -2,7 +2,33 @@
 
 A personal full-stack playground built to refresh and sharpen hands-on skills in **React**, **TypeScript**, and **Python (FastAPI)**, while building a clean, complete, and functional app just for fun.
 
-It features a Vercel-inspired dark interface that connects to multiple cloud LLM providers (Groq, Google Gemini, OpenRouter), supports dual-model side-by-side benchmarking, and implements real-time usage tracking with Redis.
+This app backend connects to a local Redis Docker instance.
+
+It features a Tailwind CSS homepage-inspired dark interface that connects to multiple cloud LLM providers (Groq, Google Gemini, OpenRouter), supports dual-model side-by-side stream comparison, and implements real-time usage tracking with Redis.
+
+## 🌟 Key Features
+
+* **Single Chat Mode**: Direct streaming chat with selected models across providers (Groq, Google Gemini, OpenRouter).
+* **Duo Arena Mode**: Benchmark two models side-by-side with identical prompts to compare response speed, output streaming quality, and token counts.
+* **Usage & Rate Limiting**: Backend tracks daily token allowances and rate limits per client IP/device using a local Redis instance.
+* **Tailwind-Inspired Dark UI**: Responsive, centered dark-mode layout inspired by the Tailwind CSS homepage.
+
+---
+
+## 🏗 Architecture & Tech Stack
+
+This project is structured as a full-stack **Monorepo**:
+
+* **Backend (`backend/`)**:
+  * **Framework**: Python 3.12, FastAPI, Uvicorn
+  * **Database / Cache**: Redis (running via Docker container)
+  * **LLM Clients**: Async API wrappers for Groq, Google Gemini, and OpenRouter
+* **Frontend (`frontend/`)**:
+  * **Framework**: React 18, TypeScript, Vite
+  * **Styling**: Tailwind CSS
+  * **State & Testing**: Vitest, React Testing Library, Playwright (E2E)
+
+---
 
 ## 🏗️ Monorepo Structure
 
@@ -39,6 +65,7 @@ chat-playground/
 * **💬 Single Chat Mode:** Stream responses with model selection across multiple cloud providers (**Groq Cloud**, **Google Gemini**, **OpenRouter**).
 * **⚔️ Duo Arena Mode:** Compare two models side-by-side using a single prompt to evaluate response speed, output structure, and token efficiency simultaneously.
 * **📊 Real-time Metric Tracking:** Dynamic badges for input/output token usage, completion time, and progress towards the daily usage limit.
+* **🎨 Vercel-Inspired UI:** Dark layout with semantic accessibility integration (`aria-pressed`, `data-testid`).
 * **🛑 Stream Cancellation:** Stop generation mid-stream using native `AbortController` handles.
 
 ### ⚡ Backend (Python + FastAPI + Redis)
@@ -47,21 +74,6 @@ chat-playground/
 * **🛡️ Smart Rate Limiting:** Redis-backed request and token tracking based on user IP address and client device fingerprinting.
 * **🔒 Key Isolation:** Keeps API credentials secure on the server, avoiding client-side exposure.
 * **⚙️ Over-Usage Prevention:** Enforces daily token limits before upstream provider requests are dispatched.
-
-## 🛠️ Tech Stack
-
-* **Backend:** Python 3.12, FastAPI, Redis 7, Pytest, Uvicorn
-* **Frontend:** React 18, TypeScript, Vite, Tailwind CSS v4, Lucide Icons
-* **Testing:**
-  * **Backend Unit Tests:** Pytest
-  * **Frontend Unit Tests:** Vitest + React Testing Library
-  * **End-to-End Tests:** Playwright
-* **CI/CD:** GitHub Actions
-
-## Screenshots
-![alt text](docs/asset/image-chat.png)
-![alt text](docs/asset/image-model-selection.png)
-![alt text](<docs/asset/image -duoarena.png>)
 
 
 ## 🚀 Local Development Setup
@@ -92,13 +104,17 @@ cp .env.example .env
 Configure your `.env` variables in `backend/`:
 
 ```env
-PORT=8686
-REDIS_HOST=localhost
-REDIS_PORT=6379
 GROQ_API_KEY=your_groq_api_key
-GEMINI_API_KEY=your_gemini_api_key
+GOOGLE_API_KEY=your_gemini_api_key
 OPENROUTER_API_KEY=your_openrouter_api_key
-DAILY_TOKEN_LIMIT=10000
+
+# For backend logging
+LOG_LEVEL=DEBUG
+LOG_FILE_PATH=./logs/backend.log
+
+# Users rate limit and daily tokens quota settings
+USER_MAX_REQS_PER_MIN = 10
+USER_MAX_DAILY_TOKENS = 10000
 ```
 
 Start the FastAPI application server:
@@ -175,3 +191,7 @@ The repository includes a GitHub Actions pipeline running on all `push` and `pul
    * Installs Playwright Chromium binaries and builds production bundle (`npm run build`).
    * Runs Playwright E2E tests (`npm run test:e2e`).
    * Uploads Playwright test reports as artifacts on failure.
+
+## 📝 License
+
+This project is licensed under the [MIT License](LICENSE).
