@@ -39,7 +39,6 @@ chat-playground/
 * **💬 Single Chat Mode:** Stream responses with model selection across multiple cloud providers (**Groq Cloud**, **Google Gemini**, **OpenRouter**).
 * **⚔️ Duo Arena Mode:** Compare two models side-by-side using a single prompt to evaluate response speed, output structure, and token efficiency simultaneously.
 * **📊 Real-time Metric Tracking:** Dynamic badges for input/output token usage, completion time, and progress towards the daily usage limit.
-* **🎨 Vercel-Inspired UI:** Dark layout with semantic accessibility integration (`aria-pressed`, `data-testid`).
 * **🛑 Stream Cancellation:** Stop generation mid-stream using native `AbortController` handles.
 
 ### ⚡ Backend (Python + FastAPI + Redis)
