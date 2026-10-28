@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # User's rate limit (10 request per min) and usage (5000 tokens per day)
     USER_MAX_REQS_PER_MIN: int = 10
-    USER_MAX_DAILY_TOKENS: int = 5000
+    USER_MAX_DAILY_TOKENS: int = 10000
 
 
 # LRU Cache so that Pydantic only read .env once and cache the settings for future use.

@@ -23,7 +23,6 @@ def make_request(
     if device_fp is not None:
         headers.append((b"x-device-fp", device_fp.encode()))
 
-    # Add header extra if exist in params
     if headers_extra:
         for k, v in headers_extra.items():
             headers.append((k.encode(), v.encode()))
@@ -35,6 +34,15 @@ def make_request(
             "client": client,
         }
     )
+
+
+@pytest.fixture(autouse=True)
+def mock_settings():
+    """Tự động mock settings cho mọi test case để chạy an toàn trên CI/CD (GitHub Actions)"""
+    with patch("app.core.security.settings") as mock_set:
+        mock_set.USER_MAX_REQS_PER_MIN = 10
+        mock_set.USER_MAX_DAILY_TOKENS = 10000
+        yield mock_set
 
 
 @pytest.fixture
@@ -61,7 +69,6 @@ async def test_missing_client(redis_mock):
     client, _ = redis_mock
     request = make_request(client=None)
 
-    # Hành vi hiện tại: request.client.host gây AttributeError.
     with pytest.raises(AttributeError):
         await verify_rate_limit_and_quota(request)
 
@@ -97,8 +104,6 @@ async def test_missing_session_id(redis_mock):
 @pytest.mark.asyncio
 async def test_new_counter_allows_request(redis_mock):
     _, pipe = redis_mock
-
-    # Redis INCR tạo key chưa tồn tại và trả về 1.
     pipe.execute.return_value = [1, True]
 
     result = await verify_rate_limit_and_quota(make_request())
@@ -114,8 +119,6 @@ async def test_new_counter_allows_request(redis_mock):
 @pytest.mark.asyncio
 async def test_existing_counter_allows_request(redis_mock):
     _, pipe = redis_mock
-
-    # Counter đã tồn tại; sau INCR đạt 10, vẫn được phép.
     pipe.execute.return_value = [10, True]
 
     result = await verify_rate_limit_and_quota(make_request())
@@ -127,8 +130,6 @@ async def test_existing_counter_allows_request(redis_mock):
 @pytest.mark.asyncio
 async def test_existing_counter_exceeds_limit(redis_mock):
     _, pipe = redis_mock
-
-    # Sau INCR đạt 11, vượt giới hạn.
     pipe.execute.return_value = [11, True]
 
     with pytest.raises(HTTPException) as exc:
@@ -173,7 +174,6 @@ async def test_update_token_usage(redis_mock):
     total_tokens = 20
     pipe.execute.return_value = [total_tokens, True]
 
-    # Process the function with 20 tokens
     await update_token_usage("127.0.0.1", "aabbgghtyuhjgddddertyuujt", total_tokens)
 
     today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
@@ -209,7 +209,6 @@ async def test_x_forwarded_for_header(redis_mock):
 @pytest.mark.asyncio
 async def test_invalid_session_id_contains_colon(redis_mock):
     client, _ = redis_mock
-
     request = make_request(session_id="session:malicious")
 
     with pytest.raises(HTTPException) as exc:
@@ -223,7 +222,6 @@ async def test_invalid_session_id_contains_colon(redis_mock):
 @pytest.mark.asyncio
 async def test_invalid_session_id_too_long(redis_mock):
     client, _ = redis_mock
-    # session_id dài quá 128 ký tự
     long_session_id = "a" * 129
     request = make_request(session_id=long_session_id)
 
