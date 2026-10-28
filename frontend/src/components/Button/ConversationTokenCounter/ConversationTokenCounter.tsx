@@ -10,9 +10,9 @@ export interface ConversationTokenCounterProps {
 }
 
 /**
- * Estimates token count.
- * Adjusts heuristic for CJK (Chinese, Japanese, Korean) characters
- * which consume significantly more tokens per character.
+- Estimates token count.
+- Adjusts heuristic for CJK (Chinese, Japanese, Korean) characters
+- which consume significantly more tokens per character.
  */
 const estimateTokenCount = (str: string): number => {
   if (!str) return 0;
@@ -57,7 +57,7 @@ export const ConversationTokenCounter: React.FC<ConversationTokenCounterProps> =
       estCompletionTokens += streamingTokens;
       estTotalTokens += streamingTokens;
     }
-    // Only update promptTokens, completetionTokens, totalTokens using values returned from backend.
+
     if (isStreaming) {
       return {
         promptTokens: promptTokens + estPromptTokens,
@@ -75,34 +75,34 @@ export const ConversationTokenCounter: React.FC<ConversationTokenCounterProps> =
       role="status"
       aria-live="polite"
       aria-label={`Token usage: ${tokenStats.totalTokens} total tokens`}
-      className="flex items-center gap-2 text-xs font-mono text-gray-600 bg-white/80 border border-gray-200 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm select-none"
+      className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-slate-900/80 border border-slate-800/80 px-3.5 py-1.5 rounded-full shadow-lg backdrop-blur-xl select-none"
     >
       <Cpu
         data-testid="cpu-icon"
         aria-hidden="true"
         className={`w-4 h-4 transition-colors duration-500 ${
-          isStreaming ? "text-blue-600 animate-pulse" : "text-gray-400"
+          isStreaming ? "text-sky-400 animate-pulse" : "text-slate-500"
         }`}
       />
 
       <div className="flex items-center gap-1.5">
-        <span className="text-gray-500">Tokens used in current chat:</span>
-        <span className="font-bold text-gray-800 tabular-nums">
+        <span className="text-slate-400">Tokens used:</span>
+        <span className="font-bold text-slate-200 tabular-nums">
           {tokenStats.totalTokens.toLocaleString()}
         </span>
 
-        <span className="text-gray-400 text-[11px] font-normal tabular-nums">
+        <span className="text-slate-500 text-[11px] font-normal tabular-nums">
           ({tokenStats.promptTokens.toLocaleString()} in /{" "}
           {tokenStats.completionTokens.toLocaleString()} out)
         </span>
 
         {!isStreaming ? (
           <CheckCircle2
-            className="w-3.5 h-3.5 text-green-500 ml-0.5 flex-shrink-0"
+            className="w-3.5 h-3.5 text-emerald-400 ml-0.5 flex-shrink-0"
             aria-label="Token count finalized"
           />
         ) : (
-          <span className="flex items-center text-blue-500 text-[11px] font-medium ml-1 select-none">
+          <span className="flex items-center text-sky-400 text-[11px] font-medium ml-1 select-none">
             calculating
             <span className="inline-flex ml-0.5" aria-hidden="true">
               <span className="animate-bounce" style={{ animationDelay: "0ms" }}>

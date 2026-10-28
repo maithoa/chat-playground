@@ -77,49 +77,53 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   };
 
   if (loading) {
-    return <div className="text-sm text-gray-500">Loading LLM Providers...</div>;
+    return (
+      <div className="text-xs text-slate-500 font-mono py-1">
+        Loading LLM Providers...
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div className="text-sm text-red-500 bg-red-50 p-2 rounded border border-red-200">
+      <div className="text-xs text-rose-400 bg-rose-950/40 p-2.5 rounded-xl border border-rose-800/60 font-mono">
         ⚠ {error} (Please check if Backend is running!)
       </div>
     );
   }
 
   return (
-    <div className="flex gap-4 items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+    <div className="flex gap-4 items-center bg-slate-900/80 backdrop-blur-xl p-3.5 rounded-2xl border border-slate-800/90 shadow-xl">
+      <div className="flex flex-col gap-1.5 flex-1">
+        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
           Provider
         </label>
         <select
           value={selectedProviderId}
           onChange={handleProviderChange}
           disabled={disabled}
-          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-slate-700/60 rounded-xl px-3 py-2 text-xs bg-slate-950/80 text-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500/50 focus:border-sky-500/50 transition-all cursor-pointer disabled:opacity-50"
         >
           {providers.map((p) => (
-            <option key={p.id} value={p.id}>
+            <option key={p.id} value={p.id} className="bg-slate-900 text-slate-200">
               {p.name}
             </option>
           ))}
         </select>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+      <div className="flex flex-col gap-1.5 flex-1">
+        <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
           Model
         </label>
         <select
           value={selectedModelId}
           onChange={handleModelChange}
           disabled={disabled || availableModels.length === 0}
-          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-slate-700/60 rounded-xl px-3 py-2 text-xs bg-slate-950/80 text-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500/50 focus:border-sky-500/50 transition-all cursor-pointer disabled:opacity-50"
         >
           {availableModels.map((m) => (
-            <option key={m.id} value={m.id}>
+            <option key={m.id} value={m.id} className="bg-slate-900 text-slate-200">
               {m.name}
             </option>
           ))}

@@ -84,27 +84,21 @@ describe("StreamWindow component", () => {
 
     render(<StreamWindow messages={msgs} isGenerating={false} onStop={() => {}} />);
 
-    // User bubble
-    const userBubble = screen.getByText("Hello!");
-    // Điểm mấu chốt: Dùng .closest để tìm thẻ div bao ngoài có chứa class tạo background
-    const userContainer =
-      userBubble.closest(".bg-blue-600") || userBubble.parentElement?.parentElement;
-    expect(userContainer).toHaveClass("bg-blue-600", "text-white");
+    // Lấy trực tiếp container thông qua data-testid
+    const userBubble = screen.getByTestId("user-message-bubble");
+    expect(userBubble).toHaveTextContent("Hello!");
 
-    // Assistant bubble
-    const assistantBubble = screen.getByText("Hi there!");
-    const assistantContainer =
-      assistantBubble.closest(".bg-gray-100") ||
-      assistantBubble.parentElement?.parentElement;
-    expect(assistantContainer).toHaveClass("bg-gray-100", "text-gray-800");
+    const assistantBubble = screen.getByTestId("assistant-message-bubble");
+    expect(assistantBubble).toHaveTextContent("Hi there!");
   });
+
   it("shows the thinking placeholder for assistant messages without content", () => {
     const msgs: Message[] = [makeMessage("assistant", "")];
 
     render(<StreamWindow messages={msgs} isGenerating={false} onStop={() => {}} />);
 
     // The placeholder text should be present
-    expect(screen.getByText("Thinking....")).toBeInTheDocument();
+    expect(screen.getByText("Thinking...")).toBeInTheDocument();
     // The mocked Coffee icon should also be rendered
     expect(screen.getByTestId("coffee-icon")).toBeInTheDocument();
   });

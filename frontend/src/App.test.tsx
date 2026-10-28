@@ -72,19 +72,21 @@ describe("App component – tab navigation", () => {
     expect(screen.queryByTestId("duoarena-mock")).not.toBeInTheDocument();
   });
 
-  it("applies the correct active‑tab styling classes", () => {
+  it("switches active tabs status correctly", () => {
     render(<App />);
 
     const chatBtn = screen.getByRole("button", { name: /Single Chat/i });
     const arenaBtn = screen.getByRole("button", { name: /Duo Arena/i });
 
-    // Chat tab is active initially → should have white background & blue text
-    expect(chatBtn).toHaveClass("bg-white", "text-blue-600");
-    expect(arenaBtn).not.toHaveClass("bg-white", "text-blue-600");
+    // Ban đầu Single Chat active (aria-pressed = true)
+    expect(chatBtn).toHaveAttribute("aria-pressed", "true");
+    expect(arenaBtn).toHaveAttribute("aria-pressed", "false");
 
-    // Switch to arena
+    // Click chuyển sang Duo Arena
     fireEvent.click(arenaBtn);
-    expect(arenaBtn).toHaveClass("bg-white", "text-blue-600");
-    expect(chatBtn).not.toHaveClass("bg-white", "text-blue-600");
+
+    // Sau khi click, Duo Arena active, Single Chat inactive
+    expect(arenaBtn).toHaveAttribute("aria-pressed", "true");
+    expect(chatBtn).toHaveAttribute("aria-pressed", "false");
   });
 });

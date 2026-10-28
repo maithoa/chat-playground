@@ -64,9 +64,7 @@ describe("DuoArena component", () => {
     const windows = screen.getAllByTestId("stream-window");
     expect(windows).toHaveLength(2);
 
-    const textarea = screen.getByPlaceholderText(
-      /Type a message for both models/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Type a prompt/i) as HTMLTextAreaElement;
     expect(textarea).toBeInTheDocument();
     expect(textarea.value).toBe("");
 
@@ -84,9 +82,7 @@ describe("DuoArena component", () => {
       </UsageProvider>
     );
 
-    const textarea = screen.getByPlaceholderText(
-      /Type a message for both models/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Type a prompt/i) as HTMLTextAreaElement;
     const runBtn = screen.getByRole("button", { name: /run/i });
 
     expect(runBtn).toBeDisabled();
@@ -106,9 +102,7 @@ describe("DuoArena component", () => {
       </UsageProvider>
     );
 
-    const textarea = screen.getByPlaceholderText(
-      /Type a message for both models/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Type a prompt/i) as HTMLTextAreaElement;
     const runBtn = screen.getByRole("button", { name: /run/i });
 
     // 1. Nhập prompt & Run
@@ -157,9 +151,7 @@ describe("DuoArena component", () => {
       </UsageProvider>
     );
 
-    const textarea = screen.getByPlaceholderText(
-      /Type a message for both models/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Type a prompt/i) as HTMLTextAreaElement;
     const runBtn = screen.getByRole("button", { name: /run/i });
 
     fireEvent.change(textarea, { target: { value: "prompt" } });

@@ -2,29 +2,38 @@ import React from "react";
 import { useUsageContext } from "@/context/UsageContext";
 
 export const TokensConsumptionProgress: React.FC = () => {
-  // get states from UsageContext
   const { tokenUsed, maxTokens } = useUsageContext();
 
   const percentage = Math.min(Math.max((tokenUsed / maxTokens) * 100, 0), 100);
   const isAlmostEmpty = percentage >= 80;
 
   return (
-    <div className="w-full bg-gray-100 p-3 rounded-lg border border-gray-200 shadow-sm">
-      <div className="flex justify-between text-xs font-semibold text-gray-600 mb-1">
-        <span>Your daily token used</span>
-        <span className={isAlmostEmpty ? "text-red-600 font-bold" : "text-gray-800"}>
-          {tokenUsed.toLocaleString()} / {maxTokens.toLocaleString()} tokens
-        </span>
-      </div>
+    <div className="w-full px-6 py-3 relative z-10">
+      <div className="w-full flex flex-col gap-2">
+        <div className="flex justify-between text-xs font-medium text-slate-400">
+          <span className="tracking-wide">Daily token usage</span>
+          <span
+            className={
+              isAlmostEmpty
+                ? "text-rose-400 font-semibold animate-pulse"
+                : "text-slate-200 font-mono"
+            }
+          >
+            {tokenUsed.toLocaleString()} / {maxTokens.toLocaleString()} tokens
+          </span>
+        </div>
 
-      {/* Thanh progress bar */}
-      <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-        <div
-          className={`h-2.5 rounded-full transition-all duration-300 ${
-            isAlmostEmpty ? "bg-red-500 animate-pulse" : "bg-blue-600"
-          }`}
-          style={{ width: `${percentage}%` }}
-        ></div>
+        {/* Thanh progress tràn viền thanh thoát */}
+        <div className="w-full h-1.5 bg-slate-800/40 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-300 ${
+              isAlmostEmpty
+                ? "bg-rose-500 shadow-sm shadow-rose-500/50 animate-pulse"
+                : "bg-sky-500 shadow-sm shadow-sky-500/50"
+            }`}
+            style={{ width: `${percentage}%` }}
+          ></div>
+        </div>
       </div>
     </div>
   );
