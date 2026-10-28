@@ -1,41 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { getUserUsage } from "@/services/llmService";
+import React from "react";
+import { useUsageContext } from "@/context/UsageContext";
 
-export interface TokensConsumptionProgressProps {
-  refreshTrigger?: number;
-}
+export const TokensConsumptionProgress: React.FC = () => {
+  // get states from UsageContext
+  const { tokenUsed, maxTokens } = useUsageContext();
 
-export const TokensConsumptionProgress: React.FC<TokensConsumptionProgressProps> = ({
-  refreshTrigger = 0,
-}) => {
-  // component props
-  const [internalTokenUsed, setInternalTokenUsed] = useState<number>(0);
-  const [max, setMax] = useState<number>(5000);
-
-  // Fetch backend api to find out the token used and max allowed for the current device based on ip, device information and datetime
-  useEffect(() => {
-    async function fetchUserUsage() {
-      try {
-        const userUsage = await getUserUsage();
-        if (userUsage) {
-          if (typeof userUsage.tokens_used === "number") {
-            setInternalTokenUsed(userUsage.tokens_used);
-          }
-          if (typeof userUsage.max_daily_tokens === "number") {
-            setMax(userUsage.max_daily_tokens);
-          }
-        }
-      } catch (e) {
-        console.log("Error getting user's daily usage data:", e);
-        throw Error("Could not fetch user's daily usage data.");
-      }
-    }
-    fetchUserUsage();
-  }, [refreshTrigger]);
-
-  const currentUsed = internalTokenUsed;
-
-  const percentage = Math.min(Math.max((currentUsed / max) * 100, 0), 100);
+  const percentage = Math.min(Math.max((tokenUsed / maxTokens) * 100, 0), 100);
   const isAlmostEmpty = percentage >= 80;
 
   return (
@@ -43,7 +13,7 @@ export const TokensConsumptionProgress: React.FC<TokensConsumptionProgressProps>
       <div className="flex justify-between text-xs font-semibold text-gray-600 mb-1">
         <span>Your daily token used</span>
         <span className={isAlmostEmpty ? "text-red-600 font-bold" : "text-gray-800"}>
-          {currentUsed.toLocaleString()} / {max.toLocaleString()} tokens
+          {tokenUsed.toLocaleString()} / {maxTokens.toLocaleString()} tokens
         </span>
       </div>
 

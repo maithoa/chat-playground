@@ -4,7 +4,7 @@ import type { Message } from "@/types/chat";
 import { SendMsgToModel } from "@/components/Button/SendMsgToModel/SendMsgToModel";
 import { StreamWindow } from "@/components/Module/StreamWindow";
 import { ErrorMessage } from "@/components/ErrorMessage";
-import { TokensConsumptionProgress } from "@/components/Button/TokensConsumptionProgress";
+import { useUsageContext } from "@/context/UsageContext";
 
 export function ChatBox() {
   // ui state
@@ -12,7 +12,8 @@ export function ChatBox() {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [refeshTrigger, setRefreshTrigger] = useState<number>(0);
+
+  const userUsageContext = useUsageContext();
 
   // refs
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -82,12 +83,12 @@ export function ChatBox() {
           // only add chunk to buffer
           streamingBufferRef.current += chunk;
         },
-        onUsageComplete: (usage) => {
+        onUsageComplete: async (usage) => {
           // flush last part of the chunks
           flushBuffer();
 
           // set refresh trigger so that token daily usage progress bar is refreshed
-          setRefreshTrigger((prev) => prev + 1);
+          await userUsageContext.refreshUsage();
 
           setMessages((prev) => {
             const last = prev[prev.length - 1];
@@ -152,7 +153,6 @@ export function ChatBox() {
       <StreamWindow messages={messages} isGenerating={isGenerating} onStop={handleStop} />
       {/* Error message*/}
       <ErrorMessage message={errorMessage} onClose={() => setErrorMessage(null)} />
-      <TokensConsumptionProgress refreshTrigger={refeshTrigger} />
       <div className="flex-shrink-0 space-y-2 pt-2">
         {/* Input & Action Area */}
         <form onSubmit={(e) => e.preventDefault()} className="space-y-2">
