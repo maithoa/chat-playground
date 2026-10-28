@@ -3,6 +3,7 @@ import { StreamWindow } from "@/components/Module/StreamWindow";
 import { streamChat } from "@/services/llmService";
 import type { Message } from "@/types/chat";
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { useUsageContext } from "@/context/UsageContext";
 
 export function DuoArena() {
   //ui state
@@ -12,6 +13,8 @@ export function DuoArena() {
   const [isGeneratingA, setIsGeneratingA] = useState(false);
   const [isGeneratingB, setIsGeneratingB] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const userUsageContext = useUsageContext();
 
   // refs
   const abortControllerRefA = useRef<AbortController | null>(null);
@@ -102,9 +105,12 @@ export function DuoArena() {
             // only add chunk to buffer
             streamingBufferRef.current += chunk;
           },
-          onUsageComplete: (usage) => {
+          onUsageComplete: async (usage) => {
             // flush last part of the chunks
             flushBuffer(setMessages, streamingBufferRef);
+
+            // Trigger daily tokens used bar update.
+            await userUsageContext.refreshUsage();
 
             setMessages((prev) => {
               const last = prev[prev.length - 1];

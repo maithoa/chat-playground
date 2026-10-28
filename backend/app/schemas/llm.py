@@ -5,6 +5,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 from app.models.conversation import MessageBase
+from app.core.config import settings
 
 
 class ModelInfo(BaseModel):
@@ -53,3 +54,11 @@ class StreamEvent(BaseModel):
         """
         payload = {"type": self.type.value, self.type.value: self.data}
         return f"data: {json.dumps(payload,ensure_ascii=False)}\n\n"
+
+
+class UserUsage(BaseModel):
+    device_fp: str
+    tokens_used: int
+    requests_used: int
+    max_daily_tokens: int = settings.USER_MAX_DAILY_TOKENS
+    max_hourly_requests: int = settings.USER_MAX_REQS_PER_MIN
