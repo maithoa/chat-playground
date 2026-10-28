@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import call
 
 import pytest
 import datetime
@@ -142,28 +143,28 @@ async def test_existing_counter_exceeds_limit(redis_mock):
 async def test_token_quota_exceeded(redis_mock):
     client, pipe = redis_mock
     pipe.execute.return_value = [1, True]
-    client.get = AsyncMock(return_value=5000)
+    client.get = AsyncMock(side_effect=[10000, 0])
 
     with pytest.raises(HTTPException) as exc:
         await verify_rate_limit_and_quota(make_request())
 
     assert exc.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
     assert "Exceeded daily token quota" in exc.value.detail
-    pipe.execute.assert_awaited_once_with()
-    client.get.assert_awaited_once()
+    assert pipe.execute.await_count == 1
+    assert client.get.call_count == 2
 
 
 @pytest.mark.asyncio
 async def test_token_quota_within_limit(redis_mock):
     client, pipe = redis_mock
     pipe.execute.return_value = [1, True]
-    client.get = AsyncMock(return_value=4999)
+    client.get = AsyncMock(side_effect=[9999, 1000])
 
     result = await verify_rate_limit_and_quota(make_request())
 
     assert result == "aabbgghtyuhjgddddertyuujt"
-    pipe.execute.assert_awaited_once_with()
-    client.get.assert_awaited_once()
+    assert pipe.execute.await_count == 1
+    assert client.get.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -176,10 +177,16 @@ async def test_update_token_usage(redis_mock):
     await update_token_usage("127.0.0.1", "aabbgghtyuhjgddddertyuujt", total_tokens)
 
     today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
-    expected_key = f"quota:127.0.0.1:aabbgghtyuhjgddddertyuujt:{today_str}"
+    device_key = f"quota:127.0.0.1:aabbgghtyuhjgddddertyuujt:{today_str}"
+    ip_key = f"quota:ip:127.0.0.1:{today_str}"
 
-    pipe.incrby.assert_called_once_with(expected_key, total_tokens)
-    pipe.expire.assert_called_once_with(expected_key, 172800)  # 2 days (86400 * 2)
+    pipe.incrby.assert_has_calls(
+        [call(device_key, total_tokens), call(ip_key, total_tokens)], any_order=True
+    )
+    pipe.expire.assert_has_calls(
+        [call(device_key, 172800), call(ip_key, 172800)], any_order=True
+    )
+
     pipe.execute.assert_awaited_once_with()
 
 
