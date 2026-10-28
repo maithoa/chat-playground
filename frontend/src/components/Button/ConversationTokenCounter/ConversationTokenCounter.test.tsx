@@ -85,7 +85,7 @@ describe("ConversationTokenCounter", () => {
     renderCounter({ messages: msgs });
 
     // Total tokens line
-    expect(screen.getByText(/Tokens used in current chat:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tokens used:/i)).toBeInTheDocument();
     expect(screen.getByText("20")).toBeInTheDocument(); // 15 + 5
 
     // In / out breakdown

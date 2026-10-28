@@ -149,28 +149,49 @@ export function ChatBox() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full max-w-3xl p-4 overflow-hidden">
+    <div className="flex flex-col h-full w-full px-6 py-4 overflow-hidden relative z-10">
+      {/* Stream Window với viền & bóng chìm Slate */}
       <StreamWindow messages={messages} isGenerating={isGenerating} onStop={handleStop} />
-      {/* Error message*/}
+
+      {/* Error message */}
       <ErrorMessage message={errorMessage} onClose={() => setErrorMessage(null)} />
-      <div className="flex-shrink-0 space-y-2 pt-2">
-        {/* Input & Action Area */}
-        <form onSubmit={(e) => e.preventDefault()} className="space-y-2">
-          <div className="border border-gray-300 rounded-2xl p-3 focus-within:ring-2 focus-within:ring-blue-500 bg-white shadow-sm flex flex-col transition-all">
+
+      {/* Input & Action Area Container */}
+      <div className="flex-shrink-0 pt-3">
+        <form onSubmit={(e) => e.preventDefault()}>
+          <div className="relative group rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-slate-800/90 p-3 shadow-2xl transition-all duration-300 focus-within:border-sky-500/50 focus-within:ring-1 focus-within:ring-sky-500/30 hover:border-slate-700/80">
+            {/* Top highlight gradient line */}
+            <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-sky-500/30 to-transparent opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message...(Enter to Send, Shift+Enter for a new line)"
-              className="w-full border-0 focus:outline-none focus:ring-0 p-0 text-sm leading-relaxed resize-none max-h-48 overflow-y-auto block bg-transparent text-gray-800 placeholder-gray-400"
+              placeholder="Ask anything... (Press Enter to send, Shift + Enter for new line)"
+              className="w-full bg-transparent border-0 focus:outline-none focus:ring-0 p-1 text-sm leading-relaxed resize-none max-h-48 block text-slate-100 placeholder:text-slate-500/80 placeholder:font-light selection:bg-sky-500/30"
               rows={2}
               disabled={isGenerating}
             />
+
             <div
               ref={sendWrapperRef}
-              className="flex justify-end items-center pt-2 mt-1 border-t border-gray-100"
+              className="flex justify-between items-center pt-2.5 mt-1 border-t border-slate-800/60"
             >
+              {/* Shortcut Hints */}
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 select-none">
+                <span className="px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700/50 font-mono text-slate-400">
+                  Enter
+                </span>
+                <span>Send</span>
+                <span className="mx-1 text-slate-700">•</span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700/50 font-mono text-slate-400">
+                  Shift + Enter
+                </span>
+                <span>New line</span>
+              </div>
+
+              {/* Action Button */}
               <SendMsgToModel
                 disabled={isGenerating || !input.trim()}
                 onSend={(provider, model) => handleSubmit(provider, model)}

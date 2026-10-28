@@ -131,9 +131,7 @@ describe("ChatBox component", () => {
       </UsageProvider>
     );
 
-    const textarea = screen.getByPlaceholderText(
-      /Type a message/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Ask anything/i) as HTMLTextAreaElement;
     expect(textarea.value).toBe("");
 
     const sendBtn = (await screen.findByRole("button", {
@@ -157,9 +155,7 @@ describe("ChatBox component", () => {
       </UsageProvider>
     );
 
-    const textarea = screen.getByPlaceholderText(
-      /Type a message/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Ask anything/i) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Test message" } });
 
     const sendBtn = (await screen.findByRole("button", {
@@ -195,9 +191,7 @@ describe("ChatBox component", () => {
       </UsageProvider>
     );
 
-    const textarea = screen.getByPlaceholderText(
-      /Type a message/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Ask anything/i) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Abort test" } });
 
     const sendBtn = (await screen.findByRole("button", {
@@ -227,9 +221,7 @@ describe("ChatBox component", () => {
       </UsageProvider>
     );
 
-    const textarea = screen.getByPlaceholderText(
-      /Type a message/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Ask anything/i) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Error test" } });
     const sendBtn = await screen.findByRole("button", { name: /Send via/i });
     fireEvent.click(sendBtn);
@@ -253,9 +245,7 @@ describe("ChatBox component", () => {
     );
 
     // Type a user message
-    const textarea = screen.getByPlaceholderText(
-      /Type a message/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Ask anything/i) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Hi there" } });
 
     // Click the mocked Send button
@@ -295,9 +285,7 @@ describe("ChatBox component", () => {
       </UsageProvider>
     );
 
-    const textarea = screen.getByPlaceholderText(
-      /Type a message/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Ask anything/i) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Enter test" } });
 
     // Wait for button to generate
@@ -324,9 +312,7 @@ describe("ChatBox component", () => {
       </UsageProvider>
     );
 
-    const textarea = screen.getByPlaceholderText(
-      /Type a message/i
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText(/Ask anything/i) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Line1" } });
     // wait for button to be generated
     await screen.findByRole("button", { name: /Send via/i });
