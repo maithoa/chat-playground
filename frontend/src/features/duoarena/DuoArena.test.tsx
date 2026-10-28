@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { DuoArena } from "./DuoArena";
 import * as llmService from "@/services/llmService";
+import { UsageProvider } from "@/context/UsageContext";
 
 // ---------------------------------------------------------------------------
 // Mock heavy children
@@ -54,7 +55,11 @@ describe("DuoArena component", () => {
   // 1️⃣ Basic rendering
   // -----------------------------------------------------------------------
   it("renders two StreamWindow components and the input area", () => {
-    render(<DuoArena />);
+    render(
+      <UsageProvider>
+        <DuoArena />
+      </UsageProvider>
+    );
 
     const windows = screen.getAllByTestId("stream-window");
     expect(windows).toHaveLength(2);
@@ -73,7 +78,11 @@ describe("DuoArena component", () => {
   // 2️⃣ Input handling & button enable‑logic
   // -----------------------------------------------------------------------
   it("enables the Run button when there is non‑empty input", () => {
-    render(<DuoArena />);
+    render(
+      <UsageProvider>
+        <DuoArena />
+      </UsageProvider>
+    );
 
     const textarea = screen.getByPlaceholderText(
       /Type a message for both models/i
@@ -91,7 +100,11 @@ describe("DuoArena component", () => {
   // 3️⃣ Clicking Run triggers two parallel streams
   // -----------------------------------------------------------------------
   it("calls streamChat twice with the correct payloads and disables the button while generating", async () => {
-    render(<DuoArena />);
+    render(
+      <UsageProvider>
+        <DuoArena />
+      </UsageProvider>
+    );
 
     const textarea = screen.getByPlaceholderText(
       /Type a message for both models/i
@@ -138,7 +151,11 @@ describe("DuoArena component", () => {
   it("invokes AbortController.abort when the Stop button of a stream is pressed", async () => {
     const abortSpy = vi.spyOn(AbortController.prototype, "abort");
 
-    render(<DuoArena />);
+    render(
+      <UsageProvider>
+        <DuoArena />
+      </UsageProvider>
+    );
 
     const textarea = screen.getByPlaceholderText(
       /Type a message for both models/i

@@ -19,6 +19,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import * as llmService from "@/services/llmService";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ChatBox } from "@/features/chatbox/ChatBox";
+import { UsageProvider } from "@/context/UsageContext";
 
 /* ----------------------------------------------------------------------
    Mock child components
@@ -88,6 +89,14 @@ vi.mock("@/services/llmService", () => ({
   }),
 }));
 
+vi.mock("@/services/llmService", () => ({
+  streamChat: vi.fn(),
+  getUserUsage: vi.fn().mockResolvedValue({
+    tokens_used: 100,
+    max_daily_tokens: 5000,
+  }),
+}));
+
 /* ----------------------------------------------------------------------
    Test suite
 ----------------------------------------------------------------------- */
@@ -116,7 +125,11 @@ describe("ChatBox component", () => {
      Existing behaviour – unchanged (empty input, abort, error handling)
   -------------------------------------------------------------------- */
   it("does not send when input is empty", async () => {
-    render(<ChatBox />);
+    render(
+      <UsageProvider>
+        <ChatBox />
+      </UsageProvider>
+    );
 
     const textarea = screen.getByPlaceholderText(
       /Type a message/i
@@ -138,7 +151,11 @@ describe("ChatBox component", () => {
   });
 
   it("disables send button while generating", async () => {
-    render(<ChatBox />);
+    render(
+      <UsageProvider>
+        <ChatBox />
+      </UsageProvider>
+    );
 
     const textarea = screen.getByPlaceholderText(
       /Type a message/i
@@ -172,7 +189,11 @@ describe("ChatBox component", () => {
 
     // Re‑import the component so the new mock is used
     const { ChatBox: ChatBoxWithAbort } = await import("./ChatBox");
-    render(<ChatBoxWithAbort />);
+    render(
+      <UsageProvider>
+        <ChatBoxWithAbort />
+      </UsageProvider>
+    );
 
     const textarea = screen.getByPlaceholderText(
       /Type a message/i
@@ -200,7 +221,11 @@ describe("ChatBox component", () => {
     });
 
     const { ChatBox: ChatBoxError } = await import("./ChatBox");
-    render(<ChatBoxError />);
+    render(
+      <UsageProvider>
+        <ChatBoxError />
+      </UsageProvider>
+    );
 
     const textarea = screen.getByPlaceholderText(
       /Type a message/i
@@ -221,7 +246,11 @@ describe("ChatBox component", () => {
      New tests – updated usage shape, key handling, timer cleanup, etc.
   -------------------------------------------------------------------- */
   it("sends a message, streams response and passes usage to token counter", async () => {
-    render(<ChatBox />);
+    render(
+      <UsageProvider>
+        <ChatBox />
+      </UsageProvider>
+    );
 
     // Type a user message
     const textarea = screen.getByPlaceholderText(
@@ -260,7 +289,11 @@ describe("ChatBox component", () => {
   });
 
   it("pressing Enter (without Shift) triggers send", async () => {
-    render(<ChatBox />);
+    render(
+      <UsageProvider>
+        <ChatBox />
+      </UsageProvider>
+    );
 
     const textarea = screen.getByPlaceholderText(
       /Type a message/i
@@ -285,7 +318,11 @@ describe("ChatBox component", () => {
   });
 
   it("Shift+Enter inserts a newline and does NOT send", async () => {
-    render(<ChatBox />);
+    render(
+      <UsageProvider>
+        <ChatBox />
+      </UsageProvider>
+    );
 
     const textarea = screen.getByPlaceholderText(
       /Type a message/i
