@@ -95,7 +95,7 @@ def _mock_llm_service():
 def mock_redis():
 
     mock_pipeline = MagicMock()
-    mock_pipeline.execute = AsyncMock(return_value=[1, True])
+    mock_pipeline.execute = AsyncMock(return_value=[1, True, 1, True])
 
     mock_pipeline.__aenter__ = AsyncMock(return_value=mock_pipeline)
     mock_pipeline.__aexit__ = AsyncMock(return_value=None)
@@ -348,9 +348,10 @@ def test_chat_missing_session_id(mock_redis):
 
 
 def test_chat_rate_limit_exceeded(mock_redis):
-    mock_redis.get.side_effect = [11, 11]
     pipe = mock_redis.pipeline.return_value
-    pipe.execute.return_value = [11, True]
+
+    # INCRBY device, EXPIRE device, INCRBY IP, EXPIRE IP
+    pipe.execute.return_value = [11, True, 11, True]
 
     payload = {
         "provider": "testprovider",
