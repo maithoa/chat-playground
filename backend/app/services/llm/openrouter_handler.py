@@ -1,9 +1,8 @@
-import inspect
 import time
 from loguru import logger
-from typing import AsyncGenerator, List, Dict, Any, Optional, Callable
+from typing import AsyncGenerator, List, Dict, Any
 from openai import AsyncOpenAI, APITimeoutError
-from openai.types.completion_usage import CompletionUsage
+
 from app.schemas.llm import StreamEventType, StreamEvent
 from httpx import TimeoutException
 
@@ -37,7 +36,7 @@ class OpenRouterHandler(BaseLLMHandler):
         time_to_first_token = 0.0
         duration_ms = 0.0
 
-        last_chunk = None
+        last_usage = None
         first_chunk = True
 
         response = None
@@ -47,8 +46,14 @@ class OpenRouterHandler(BaseLLMHandler):
                 model=model, messages=messages, stream=True, **kwargs
             )
 
-            async for last_chunk in response:
-                content = last_chunk.choices[0].delta.content
+            async for chunk in response:
+                if chunk.usage is not None:
+                    last_usage = chunk.usage
+
+                if not chunk.choices:
+                    continue
+
+                content = chunk.choices[0].delta.content
                 if content:
                     if first_chunk:
                         time_to_first_token = time.perf_counter() - start_time
@@ -76,22 +81,19 @@ class OpenRouterHandler(BaseLLMHandler):
                 logger.info(f"Open Router (OpenAI) response type:{type(response)}")
                 await response.aclose()
 
-        if last_chunk and last_chunk.usage:
-            duration_ms = time.perf_counter() - start_time
+        if last_usage is not None:
+            duration_sec = time.perf_counter() - start_time
             tokens_per_second = 0
-            if (
-                last_chunk.usage.completion_tokens
-                and last_chunk.usage.completion_tokens > 0
-            ):
+            if last_usage.completion_tokens and last_usage.completion_tokens > 0:
                 tokens_per_second = (
-                    last_chunk.usage.completion_tokens / duration_ms
-                    if duration_ms > 0
+                    last_usage.completion_tokens / duration_sec
+                    if duration_sec > 0
                     else 0
                 )
             usage_data = {
-                "prompt_tokens": last_chunk.usage.prompt_tokens,
-                "completion_tokens": last_chunk.usage.completion_tokens,
-                "total_tokens": last_chunk.usage.total_tokens,
+                "prompt_tokens": last_usage.prompt_tokens,
+                "completion_tokens": last_usage.completion_tokens,
+                "total_tokens": last_usage.total_tokens,
                 "time_to_first_token_ms": round(time_to_first_token * 1000, 2),
                 "tokens_per_second": round(tokens_per_second, 2),
             }
