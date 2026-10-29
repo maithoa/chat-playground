@@ -152,7 +152,6 @@ async def increase_requests_pm_count(client_ip: str, device_fp: str):
     current_window = current_time // window_seconds
     rate_limit_key = f"rl:{client_ip}:{device_fp}:{current_window}"
     rate_limit_per_ip = f"rl:{client_ip}:{current_window}"
-    resutls = (0, 0)
 
     async with redis_client.pipeline() as pipe:
         pipe.incrby(rate_limit_key, 1)

@@ -109,6 +109,14 @@ def mock_redis():
         yield redis_client
 
 
+@pytest.fixture(autouse=True)
+def mock_security_settings():
+    with patch("app.core.security.settings") as mock_settings:
+        mock_settings.USER_MAX_REQS_PER_MIN = 10
+        mock_settings.USER_MAX_DAILY_TOKENS = 10000
+        yield mock_settings
+
+
 def _post_chat(headers: dict, payload: dict):
     """Helper to POST to the chat endpoint using the test client.
 
