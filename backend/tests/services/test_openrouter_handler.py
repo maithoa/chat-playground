@@ -275,3 +275,46 @@ async def test_openrouter_handler_stream_chat_empty_chunk():
     assert async_usage_data == []
     response = mock_client.chat.completions.create.return_value
     response.aclose.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("trailing_empty_chunk", [False, True])
+async def test_openrouter_preserves_usage_only_chunk(trailing_empty_chunk):
+    usage = CompletionUsage(
+        prompt_tokens=5,
+        completion_tokens=10,
+        total_tokens=15,
+    )
+    chunks = [
+        MockChunk("Hello"),
+        MagicMock(choices=[], usage=usage),
+    ]
+    if trailing_empty_chunk:
+        chunks.append(MagicMock(choices=[], usage=None))
+
+    mock_client = _mock_client(chunks)
+
+    with patch(
+        "app.services.llm.openrouter_handler.AsyncOpenAI",
+        return_value=mock_client,
+    ):
+        handler = OpenRouterHandler(api_key="dummy-key")
+        events = [
+            event
+            async for event in handler.stream_chat(
+                model="test-model",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+        ]
+
+    assert [event.type for event in events] == [
+        StreamEventType.CONTENT,
+        StreamEventType.USAGE,
+    ]
+    assert events[0].data == "Hello"
+    assert events[1].data["prompt_tokens"] == 5
+    assert events[1].data["completion_tokens"] == 10
+    assert events[1].data["total_tokens"] == 15
+
+    response = mock_client.chat.completions.create.return_value
+    response.aclose.assert_awaited_once()
