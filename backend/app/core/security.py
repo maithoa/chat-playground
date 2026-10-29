@@ -17,11 +17,10 @@ async def verify_rate_limit_and_quota(request: Request):
     # Get the client IP and session id
     client_ip = getattr(request.client, "host", None)
     if not client_ip:
-        raise AttributeError("Missing client ip")
-
-    forward_for = request.headers.get("x-forwarded-for")
-    if forward_for:
-        client_ip = forward_for.split(",")[0].strip()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing client IP address.",
+        )
 
     session_id = request.headers.get("x-session-id")
     if not session_id:
@@ -202,13 +201,20 @@ async def get_user_usage_data():
 
 
 async def extract_client_context(request: Request):
+
     client_ip = getattr(request.client, "host", None)
-    if forward_for := request.headers.get("x-forwarded-for"):
-        client_ip = forward_for.split(",")[0].strip()
+    if not client_ip:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing client IP address.",
+        )
 
     device_fp = request.headers.get("x-device-fp")
     if not device_fp:
-        raise HTTPException(status_code=400, detail="Missing x-device-fp in header.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing x-device-fp in header.",
+        )
 
     client_ip_var.set(client_ip)
     client_device_fp_var.set(device_fp)

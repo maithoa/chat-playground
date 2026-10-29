@@ -69,10 +69,12 @@ async def test_missing_client(redis_mock):
     client, _ = redis_mock
     request = make_request(client=None)
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(HTTPException) as ex:
         await verify_rate_limit_and_quota(request)
 
     client.pipeline.assert_not_called()
+    assert ex.value.status_code == 400
+    assert ex.value.detail == "Missing client IP address."
 
 
 @pytest.mark.asyncio
@@ -188,22 +190,6 @@ async def test_update_token_usage(redis_mock):
     )
 
     pipe.execute.assert_awaited_once_with()
-
-
-@pytest.mark.asyncio
-async def test_x_forwarded_for_header(redis_mock):
-    client, pipe = redis_mock
-    request = make_request(
-        client=("127.0.0.1", 12345),
-        headers_extra={"x-forwarded-for": "203.0.113.195, 70.41.3.18"},
-    )
-
-    result = await verify_rate_limit_and_quota(request)
-
-    assert result == "aabbgghtyuhjgddddertyuujt"
-
-    expected_key = "rl:203.0.113.195:aabbgghtyuhjgddddertyuujt:2"
-    pipe.incr.assert_called_once_with(expected_key)
 
 
 @pytest.mark.asyncio
