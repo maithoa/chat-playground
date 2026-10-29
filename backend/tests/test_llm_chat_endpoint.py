@@ -348,6 +348,7 @@ def test_chat_missing_session_id(mock_redis):
 
 
 def test_chat_rate_limit_exceeded(mock_redis):
+    mock_redis.get.side_effect = [11, 11]
     pipe = mock_redis.pipeline.return_value
     pipe.execute.return_value = [11, True]
 

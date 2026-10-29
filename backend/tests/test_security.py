@@ -113,14 +113,32 @@ async def test_new_counter_allows_request(redis_mock):
     assert result == "aabbgghtyuhjgddddertyuujt"
 
     expected_key = "rl:127.0.0.1:aabbgghtyuhjgddddertyuujt:2"
-    pipe.incr.assert_called_once_with(expected_key)
-    pipe.expire.assert_called_once_with(expected_key, 65)
-    pipe.execute.assert_awaited_once_with()
+
+    pipe.incrby.assert_has_calls(
+        [
+            call("rl:127.0.0.1:aabbgghtyuhjgddddertyuujt:2", 1),
+            call("rl:127.0.0.1:2", 1),
+        ]
+    )
+
+    pipe.expire.assert_has_calls(
+        [
+            call("rl:127.0.0.1:aabbgghtyuhjgddddertyuujt:2", 172800),
+            call("rl:127.0.0.1:2", 172800),
+        ]
+    )
 
 
 @pytest.mark.asyncio
 async def test_existing_counter_allows_request(redis_mock):
-    _, pipe = redis_mock
+    client, pipe = redis_mock
+    client.get.side_effect = [
+        10,
+        30,  # device_used_requests, #30 ip_used_request
+        0,
+        0,  # device tokens, ip tokens
+    ]
+
     pipe.execute.return_value = [10, True]
 
     result = await verify_rate_limit_and_quota(make_request())
@@ -131,8 +149,13 @@ async def test_existing_counter_allows_request(redis_mock):
 
 @pytest.mark.asyncio
 async def test_existing_counter_exceeds_limit(redis_mock):
-    _, pipe = redis_mock
-    pipe.execute.return_value = [11, True]
+    client, pipe = redis_mock
+    client.get.side_effect = [
+        11,
+        30,  # device_used_requests, #30 ip_used_request
+        0,
+        0,  # device tokens, ip tokens
+    ]
 
     with pytest.raises(HTTPException) as exc:
         await verify_rate_limit_and_quota(make_request())
@@ -143,10 +166,32 @@ async def test_existing_counter_exceeds_limit(redis_mock):
 
 
 @pytest.mark.asyncio
+async def test_existing_counter_exceeds_limit_for_ipaddr(redis_mock):
+    client, pipe = redis_mock
+    client.get.side_effect = [
+        9,
+        31,  # device_used_requests, #30 ip_used_request
+        0,
+        0,  # device tokens, ip tokens
+    ]
+
+    with pytest.raises(HTTPException) as exc:
+        await verify_rate_limit_and_quota(make_request())
+
+    assert exc.value.status_code == 429
+    assert exc.value.detail == "Exceeded limit of max requests/min for an IP address."
+    pipe.execute.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
 async def test_token_quota_exceeded(redis_mock):
     client, pipe = redis_mock
-    pipe.execute.return_value = [1, True]
-    client.get = AsyncMock(side_effect=[10000, 0])
+    client.get.side_effect = [
+        0,
+        0,  # device_used_requests, #30 ip_used_request
+        10000,
+        20000,  # device tokens, ip tokens
+    ]
 
     with pytest.raises(HTTPException) as exc:
         await verify_rate_limit_and_quota(make_request())
@@ -154,20 +199,24 @@ async def test_token_quota_exceeded(redis_mock):
     assert exc.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
     assert "Exceeded daily token quota" in exc.value.detail
     assert pipe.execute.await_count == 1
-    assert client.get.call_count == 2
+    assert client.get.call_count == 4
 
 
 @pytest.mark.asyncio
 async def test_token_quota_within_limit(redis_mock):
     client, pipe = redis_mock
-    pipe.execute.return_value = [1, True]
-    client.get = AsyncMock(side_effect=[9999, 1000])
+    client.get.side_effect = [
+        0,
+        0,  # device_used_requests, #30 ip_used_request
+        9999,
+        19999,  # device tokens, ip tokens
+    ]
 
     result = await verify_rate_limit_and_quota(make_request())
 
     assert result == "aabbgghtyuhjgddddertyuujt"
     assert pipe.execute.await_count == 1
-    assert client.get.call_count == 2
+    assert client.get.call_count == 4
 
 
 @pytest.mark.asyncio

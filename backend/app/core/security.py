@@ -56,6 +56,7 @@ async def verify_rate_limit_and_quota(request: Request):
     logger.info(
         f"Session id: {session_id}, IP: {client_ip}, Device fingerprint: {device_fp}"
     )
+    await increase_requests_pm_count(client_ip, device_fp)
 
     await _check_rate_limit(client_ip=client_ip, device_fp=device_fp)
     await _check_token_quota(client_ip=client_ip, device_fp=device_fp)
@@ -76,14 +77,16 @@ async def _check_rate_limit(client_ip: str, device_fp: str):
     current_time = int(time.time())
     current_window = current_time // window_seconds
     rate_limit_key = f"rl:{client_ip}:{device_fp}:{current_window}"
+    rate_limit_per_ip = f"rl:{client_ip}:{current_window}"
     hourly_requests = 0
 
     try:
-        async with redis_client.pipeline() as pipe:
-            pipe.incr(rate_limit_key)
-            pipe.expire(rate_limit_key, window_seconds + 5)
-            results = await pipe.execute()
-            hourly_requests = int(results[0]) if results[0] else 0
+        device_requests_res, ip_requests_res = await asyncio.gather(
+            redis_client.get(rate_limit_key), redis_client.get(rate_limit_per_ip)
+        )
+
+        hourly_requests = int(device_requests_res) if device_requests_res else 0
+        ip_requests = int(ip_requests_res) if ip_requests_res else 0
 
     except Exception as ex:
         logger.error(f"Redis error in rate limit checking: {ex}")
@@ -95,7 +98,15 @@ async def _check_rate_limit(client_ip: str, device_fp: str):
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Exceeded limit of {max_reqs_pm} requests/min.",
         )
-    return int(results[0])
+    #
+    if ip_requests > max_reqs_pm * 3:
+        logger.info("Exceeded limit of max requests per min per IP address.")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Exceeded limit of max requests/min for an IP address.",
+        )
+
+    return int(hourly_requests)
 
 
 async def _check_token_quota(client_ip: str, device_fp: str):
@@ -138,6 +149,26 @@ async def _check_token_quota(client_ip: str, device_fp: str):
         )
 
     return total_used
+
+
+async def increase_requests_pm_count(client_ip: str, device_fp: str):
+    """This method is called after each called is done to api/v1/llm endpoint"""
+
+    window_seconds = 60
+
+    current_time = int(time.time())
+    current_window = current_time // window_seconds
+    rate_limit_key = f"rl:{client_ip}:{device_fp}:{current_window}"
+    rate_limit_per_ip = f"rl:{client_ip}:{current_window}"
+
+    async with redis_client.pipeline() as pipe:
+        pipe.incrby(rate_limit_key, 1)
+        pipe.expire(rate_limit_key, 86400 * 2)  # Keep the key/value for 2 days
+
+        pipe.incrby(rate_limit_per_ip, 1)
+        pipe.expire(rate_limit_per_ip, 86400 * 2)  # Keep the key/value for 2 days
+
+        await pipe.execute()
 
 
 async def update_token_usage(client_ip: str, device_fp: str, total_tokens: int):
