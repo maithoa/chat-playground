@@ -13,6 +13,12 @@ It features a Tailwind CSS homepage-inspired dark interface that connects to mul
 * **Usage & Rate Limiting**: Backend tracks daily token allowances and rate limits per client IP/device using a local Redis instance.
 * **Tailwind-Inspired Dark UI**: Responsive, centered dark-mode layout inspired by the Tailwind CSS homepage.
 
+## Screenshots
+![alt text](docs/asset/image-chat.png)
+![alt text](docs/asset/image-model-selection.png)
+![alt text](<docs/asset/image -duoarena.png>)
+
+
 ---
 
 ## 🏗 Architecture & Tech Stack
