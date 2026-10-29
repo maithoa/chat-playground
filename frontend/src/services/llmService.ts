@@ -78,21 +78,23 @@ export async function streamChat({
       if (dataStr === "[DONE]") return;
 
       // Parse Server Stream payload
+      let parsed;
       try {
-        const parsed = JSON.parse(dataStr);
+        parsed = JSON.parse(dataStr);
         console.log("-----DEBUG---- dataStr:", { parsed });
-        if (parsed.error) {
-          throw new Error(parsed.error);
-        }
-        if (parsed.content) {
-          outChunk(parsed.content);
-        }
-        if (parsed.usage) {
-          console.log("-----DEBUG---- parsed usage:", parsed.usage);
-          onUsageComplete(parsed.usage);
-        }
       } catch (e) {
         console.error("Failed to parse SSE payload:", dataStr, e);
+        continue;
+      }
+      if (parsed.error) {
+        throw new Error(parsed.error);
+      }
+      if (parsed.content) {
+        outChunk(parsed.content);
+      }
+      if (parsed.usage) {
+        console.log("-----DEBUG---- parsed usage:", parsed.usage);
+        onUsageComplete(parsed.usage);
       }
     }
   }
