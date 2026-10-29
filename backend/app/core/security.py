@@ -56,7 +56,6 @@ async def verify_rate_limit_and_quota(request: Request):
     logger.info(
         f"Session id: {session_id}, IP: {client_ip}, Device fingerprint: {device_fp}"
     )
-    await increase_requests_pm_count(client_ip, device_fp)
 
     await _check_rate_limit(client_ip=client_ip, device_fp=device_fp)
     await _check_token_quota(client_ip=client_ip, device_fp=device_fp)
@@ -72,25 +71,18 @@ async def _check_rate_limit(client_ip: str, device_fp: str):
         client_ip: Client side IP address
         session_id: Sessions from Client
     """
-    window_seconds = 60
     max_reqs_pm = settings.USER_MAX_REQS_PER_MIN
-    current_time = int(time.time())
-    current_window = current_time // window_seconds
-    rate_limit_key = f"rl:{client_ip}:{device_fp}:{current_window}"
-    rate_limit_per_ip = f"rl:{client_ip}:{current_window}"
     hourly_requests = 0
+    ip_requests = 0
 
     try:
-        device_requests_res, ip_requests_res = await asyncio.gather(
-            redis_client.get(rate_limit_key), redis_client.get(rate_limit_per_ip)
+        hourly_requests, ip_requests = await increase_requests_pm_count(
+            client_ip, device_fp
         )
-
-        hourly_requests = int(device_requests_res) if device_requests_res else 0
-        ip_requests = int(ip_requests_res) if ip_requests_res else 0
 
     except Exception as ex:
         logger.error(f"Redis error in rate limit checking: {ex}")
-        raise HTTPException(status_code=500, detail="Internal Server Error.")
+        raise HTTPException(status_code=503, detail="Internal Server Error.")
 
     if hourly_requests > max_reqs_pm:
         logger.info("Exceeded limit of max requests per min.")
@@ -160,15 +152,17 @@ async def increase_requests_pm_count(client_ip: str, device_fp: str):
     current_window = current_time // window_seconds
     rate_limit_key = f"rl:{client_ip}:{device_fp}:{current_window}"
     rate_limit_per_ip = f"rl:{client_ip}:{current_window}"
+    resutls = (0, 0)
 
     async with redis_client.pipeline() as pipe:
         pipe.incrby(rate_limit_key, 1)
-        pipe.expire(rate_limit_key, 86400 * 2)  # Keep the key/value for 2 days
+        pipe.expire(rate_limit_key, window_seconds + 5)
 
         pipe.incrby(rate_limit_per_ip, 1)
-        pipe.expire(rate_limit_per_ip, 86400 * 2)  # Keep the key/value for 2 days
+        pipe.expire(rate_limit_per_ip, window_seconds + 5)
 
-        await pipe.execute()
+        results = await pipe.execute()
+    return int(results[0]), int(results[2])
 
 
 async def update_token_usage(client_ip: str, device_fp: str, total_tokens: int):

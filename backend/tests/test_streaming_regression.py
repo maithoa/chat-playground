@@ -40,7 +40,7 @@ def mock_llm_providers():
 def mock_redis():
 
     mock_pipeline = MagicMock()
-    mock_pipeline.execute = AsyncMock(return_value=[1, True])
+    mock_pipeline.execute = AsyncMock(return_value=[1, True, 1, True])
 
     mock_pipeline.__aenter__ = AsyncMock(return_value=mock_pipeline)
     mock_pipeline.__aexit__ = AsyncMock(return_value=None)
@@ -51,6 +51,14 @@ def mock_redis():
 
     with patch("app.core.security.redis_client", new=redis_client):
         yield redis_client
+
+
+@pytest.fixture(autouse=True)
+def mock_security_settings():
+    with patch("app.core.security.settings") as mock_settings:
+        mock_settings.USER_MAX_REQS_PER_MIN = 10
+        mock_settings.USER_MAX_DAILY_TOKENS = 10000
+        yield mock_settings
 
 
 # ==========================================
