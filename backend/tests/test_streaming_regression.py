@@ -291,6 +291,22 @@ async def test_exception_leakage_and_credential_safety(client: AsyncClient):
 
     error_body = response_body.lower()
 
+    events = [
+        json.loads(line.removeprefix("data:").strip())
+        for line in response_body.splitlines()
+        if line.startswith("data:")
+    ]
+
+    error_events = [
+        event for event in events if event.get("type") == StreamEventType.ERROR.value
+    ]
+
+    assert len(error_events) == 1
+    assert error_events[0]["error"] == (
+        "An unexpected error occurred while processing your request. "
+        "Please try again later."
+    )
+
     # ❌ Forbidden security leak patterns inside the streamed response
     forbidden_keywords = [
         "traceback",
@@ -340,3 +356,4 @@ async def test_endpoint_accepts_empty_stream(client: AsyncClient):
     ):
         response = await client.post("/api/v1/llm/chat", headers=headers, json=payload)
         assert response.status_code == 200
+        assert response.text == ""
