@@ -7,6 +7,8 @@ from app.schemas.llm import ProviderInfo, ChatRequest, UserUsage
 from app.services.llm.service import LLMService
 from app.schemas.llm import StreamEventType, StreamEvent
 from loguru import logger
+from app.core.metrics import CHAT_REQUESTS
+
 
 from app.core.security import (
     verify_rate_limit_and_quota,
@@ -107,6 +109,11 @@ async def chat_stream(
             if stream is not None:
                 await stream.aclose()
                 logger.info("API end point closed stream service.")
+
+        CHAT_REQUESTS.labels(
+            provider=provider_info.id,
+            model=model_info.id,
+        ).inc()
 
     return StreamingResponse(
         event_generator(),
