@@ -40,7 +40,7 @@ def mock_llm_providers():
 def mock_redis():
 
     mock_pipeline = MagicMock()
-    mock_pipeline.execute = AsyncMock(return_value=[1, True])
+    mock_pipeline.execute = AsyncMock(return_value=[1, True, 1, True])
 
     mock_pipeline.__aenter__ = AsyncMock(return_value=mock_pipeline)
     mock_pipeline.__aexit__ = AsyncMock(return_value=None)
@@ -51,6 +51,14 @@ def mock_redis():
 
     with patch("app.core.security.redis_client", new=redis_client):
         yield redis_client
+
+
+@pytest.fixture(autouse=True)
+def mock_security_settings():
+    with patch("app.core.security.settings") as mock_settings:
+        mock_settings.USER_MAX_REQS_PER_MIN = 10
+        mock_settings.USER_MAX_DAILY_TOKENS = 10000
+        yield mock_settings
 
 
 # ==========================================
@@ -283,6 +291,22 @@ async def test_exception_leakage_and_credential_safety(client: AsyncClient):
 
     error_body = response_body.lower()
 
+    events = [
+        json.loads(line.removeprefix("data:").strip())
+        for line in response_body.splitlines()
+        if line.startswith("data:")
+    ]
+
+    error_events = [
+        event for event in events if event.get("type") == StreamEventType.ERROR.value
+    ]
+
+    assert len(error_events) == 1
+    assert error_events[0]["error"] == (
+        "An unexpected error occurred while processing your request. "
+        "Please try again later."
+    )
+
     # ❌ Forbidden security leak patterns inside the streamed response
     forbidden_keywords = [
         "traceback",
@@ -332,3 +356,4 @@ async def test_endpoint_accepts_empty_stream(client: AsyncClient):
     ):
         response = await client.post("/api/v1/llm/chat", headers=headers, json=payload)
         assert response.status_code == 200
+        assert response.text == ""

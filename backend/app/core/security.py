@@ -17,11 +17,10 @@ async def verify_rate_limit_and_quota(request: Request):
     # Get the client IP and session id
     client_ip = getattr(request.client, "host", None)
     if not client_ip:
-        raise AttributeError("Missing client ip")
-
-    forward_for = request.headers.get("x-forwarded-for")
-    if forward_for:
-        client_ip = forward_for.split(",")[0].strip()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing client IP address.",
+        )
 
     session_id = request.headers.get("x-session-id")
     if not session_id:
@@ -72,23 +71,18 @@ async def _check_rate_limit(client_ip: str, device_fp: str):
         client_ip: Client side IP address
         session_id: Sessions from Client
     """
-    window_seconds = 60
     max_reqs_pm = settings.USER_MAX_REQS_PER_MIN
-    current_time = int(time.time())
-    current_window = current_time // window_seconds
-    rate_limit_key = f"rl:{client_ip}:{device_fp}:{current_window}"
     hourly_requests = 0
+    ip_requests = 0
 
     try:
-        async with redis_client.pipeline() as pipe:
-            pipe.incr(rate_limit_key)
-            pipe.expire(rate_limit_key, window_seconds + 5)
-            results = await pipe.execute()
-            hourly_requests = int(results[0]) if results[0] else 0
+        hourly_requests, ip_requests = await increase_requests_pm_count(
+            client_ip, device_fp
+        )
 
     except Exception as ex:
         logger.error(f"Redis error in rate limit checking: {ex}")
-        raise HTTPException(status_code=500, detail="Internal Server Error.")
+        raise HTTPException(status_code=503, detail="Internal Server Error.")
 
     if hourly_requests > max_reqs_pm:
         logger.info("Exceeded limit of max requests per min.")
@@ -96,7 +90,15 @@ async def _check_rate_limit(client_ip: str, device_fp: str):
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Exceeded limit of {max_reqs_pm} requests/min.",
         )
-    return int(results[0])
+    #
+    if ip_requests > max_reqs_pm * 3:
+        logger.info("Exceeded limit of max requests per min per IP address.")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Exceeded limit of max requests/min for an IP address.",
+        )
+
+    return int(hourly_requests)
 
 
 async def _check_token_quota(client_ip: str, device_fp: str):
@@ -139,6 +141,27 @@ async def _check_token_quota(client_ip: str, device_fp: str):
         )
 
     return total_used
+
+
+async def increase_requests_pm_count(client_ip: str, device_fp: str):
+    """This method is called after each called is done to api/v1/llm endpoint"""
+
+    window_seconds = 60
+
+    current_time = int(time.time())
+    current_window = current_time // window_seconds
+    rate_limit_key = f"rl:{client_ip}:{device_fp}:{current_window}"
+    rate_limit_per_ip = f"rl:{client_ip}:{current_window}"
+
+    async with redis_client.pipeline() as pipe:
+        pipe.incrby(rate_limit_key, 1)
+        pipe.expire(rate_limit_key, window_seconds + 5)
+
+        pipe.incrby(rate_limit_per_ip, 1)
+        pipe.expire(rate_limit_per_ip, window_seconds + 5)
+
+        results = await pipe.execute()
+    return int(results[0]), int(results[2])
 
 
 async def update_token_usage(client_ip: str, device_fp: str, total_tokens: int):
@@ -202,13 +225,20 @@ async def get_user_usage_data():
 
 
 async def extract_client_context(request: Request):
+
     client_ip = getattr(request.client, "host", None)
-    if forward_for := request.headers.get("x-forwarded-for"):
-        client_ip = forward_for.split(",")[0].strip()
+    if not client_ip:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing client IP address.",
+        )
 
     device_fp = request.headers.get("x-device-fp")
     if not device_fp:
-        raise HTTPException(status_code=400, detail="Missing x-device-fp in header.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing x-device-fp in header.",
+        )
 
     client_ip_var.set(client_ip)
     client_device_fp_var.set(device_fp)
