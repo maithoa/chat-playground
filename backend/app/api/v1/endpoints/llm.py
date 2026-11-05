@@ -7,7 +7,8 @@ from app.schemas.llm import ProviderInfo, ChatRequest, UserUsage
 from app.services.llm.service import LLMService
 from app.schemas.llm import StreamEventType, StreamEvent
 from loguru import logger
-from app.core.metrics import CHAT_REQUESTS, CHAT_ACTIVE_STREAMS
+from app.core.metrics import CHAT_REQUESTS, CHAT_ACTIVE_STREAMS, CHAT_STREAM_DURATION
+from time import perf_counter
 
 
 from app.core.security import (
@@ -86,6 +87,7 @@ async def chat_stream(
     async def event_generator():
         stream = None
         CHAT_ACTIVE_STREAMS.inc()
+        start_time = perf_counter()
         try:
             result = LLMService.stream_chat(
                 provider=provider_info.id,
@@ -112,6 +114,7 @@ async def chat_stream(
                 logger.info("API end point closed stream service.")
 
             CHAT_ACTIVE_STREAMS.dec()
+            CHAT_STREAM_DURATION.observe(perf_counter() - start_time)
 
         CHAT_REQUESTS.labels(
             provider=provider_info.id,
