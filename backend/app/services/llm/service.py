@@ -11,6 +11,8 @@ from app.schemas.llm import StreamEvent, StreamEventType
 import asyncio
 from app.core.context import client_ip_var, client_device_fp_var
 from app.core.security import update_token_usage
+from app.core.metrics import CHAT_REQUESTS, CHAT_ACTIVE_STREAMS, CHAT_STREAM_DURATION
+from time import perf_counter
 
 
 class LLMService:
@@ -80,6 +82,10 @@ class LLMService:
         # that returns an async generator, so no special await handling is
         # required.
         handler_stream = None
+        # Metrics to log to Prometheus
+        CHAT_ACTIVE_STREAMS.inc()
+        start_time = perf_counter()
+        outcome = "error"
         try:
             handler_stream = handler.stream_chat(
                 model=model,
@@ -91,13 +97,22 @@ class LLMService:
                 if streamEvent.type == StreamEventType.USAGE:
                     await cls.on_usage_complete(streamEvent.data)
 
+                if streamEvent.type == StreamEventType.ERROR:
+                    logger.error(f"Error from LLM handler: {streamEvent.data}")
+                    outcome = "error"
+                else:
+                    outcome = "success"
+
                 yield streamEvent
+
         except asyncio.CancelledError:
             logger.warning("Stream cancelled by client disconnect.")
+            outcome = "cancelled"
             raise
 
         except Exception as ex:
             logger.error(f"Unhandled error during streaming: {ex}")
+            outcome = "error"
             yield StreamEvent(
                 type=StreamEventType.ERROR,
                 data="An error occurred while streaming response.",
@@ -106,3 +121,12 @@ class LLMService:
             if handler_stream is not None:
                 await handler_stream.aclose()
                 logger.info("LLM service stream closed.")
+
+                CHAT_ACTIVE_STREAMS.dec()
+                CHAT_STREAM_DURATION.labels(outcome=outcome).observe(
+                    perf_counter() - start_time
+                )
+            CHAT_REQUESTS.labels(
+                provider=provider,
+                model=model,
+            ).inc()
