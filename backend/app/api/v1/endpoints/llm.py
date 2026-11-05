@@ -1,3 +1,4 @@
+import asyncio
 import json
 import inspect
 from typing import List
@@ -7,8 +8,6 @@ from app.schemas.llm import ProviderInfo, ChatRequest, UserUsage
 from app.services.llm.service import LLMService
 from app.schemas.llm import StreamEventType, StreamEvent
 from loguru import logger
-from app.core.metrics import CHAT_REQUESTS, CHAT_ACTIVE_STREAMS, CHAT_STREAM_DURATION
-from time import perf_counter
 
 
 from app.core.security import (
@@ -86,8 +85,6 @@ async def chat_stream(
     # Stream generator
     async def event_generator():
         stream = None
-        CHAT_ACTIVE_STREAMS.inc()
-        start_time = perf_counter()
         try:
             result = LLMService.stream_chat(
                 provider=provider_info.id,
@@ -97,6 +94,7 @@ async def chat_stream(
             )
             stream = await result if inspect.iscoroutine(result) else result
 
+            # Stream the response from service, it includes then both success and error case.
             async for streamEvent in stream:
                 yield streamEvent.to_sse_data()
 
@@ -107,19 +105,12 @@ async def chat_stream(
                 type=StreamEventType.ERROR, data=safe_error_message
             )
             yield error_event.to_sse_data()
+            outcome = "error"
 
         finally:
             if stream is not None:
                 await stream.aclose()
                 logger.info("API end point closed stream service.")
-
-            CHAT_ACTIVE_STREAMS.dec()
-            CHAT_STREAM_DURATION.observe(perf_counter() - start_time)
-
-        CHAT_REQUESTS.labels(
-            provider=provider_info.id,
-            model=model_info.id,
-        ).inc()
 
     return StreamingResponse(
         event_generator(),

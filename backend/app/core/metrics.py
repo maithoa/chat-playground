@@ -14,5 +14,6 @@ CHAT_ACTIVE_STREAMS = Gauge(
 CHAT_STREAM_DURATION = Histogram(
     "chat_stream_duration_seconds",
     "Duration of chat stream processing in seconds",
+    labelnames=("outcome",),
     buckets=(0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300),
 )
