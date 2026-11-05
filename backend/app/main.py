@@ -11,6 +11,8 @@ from app.core.db import init_db
 from app.core.logging import init_logger
 from app.api.v1.router import api_router
 
+from prometheus_client import make_asgi_app
+
 
 # Lifespan event handlers : Automatically create connection and create SQLite tables when the application starts up
 @asynccontextmanager
@@ -25,6 +27,9 @@ init_logger()
 
 # Init FastAPI app
 app = FastAPI(title=settings.APP_NAME, version=settings.API_V1_STR, lifespan=lifespan)
+
+# Prometheus metric
+app.mount("/metrics", make_asgi_app())
 
 origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 # Add CORSMiddleweare separately
