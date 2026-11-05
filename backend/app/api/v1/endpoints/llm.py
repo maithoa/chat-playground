@@ -7,7 +7,7 @@ from app.schemas.llm import ProviderInfo, ChatRequest, UserUsage
 from app.services.llm.service import LLMService
 from app.schemas.llm import StreamEventType, StreamEvent
 from loguru import logger
-from app.core.metrics import CHAT_REQUESTS
+from app.core.metrics import CHAT_REQUESTS, CHAT_ACTIVE_STREAMS
 
 
 from app.core.security import (
@@ -85,6 +85,7 @@ async def chat_stream(
     # Stream generator
     async def event_generator():
         stream = None
+        CHAT_ACTIVE_STREAMS.inc()
         try:
             result = LLMService.stream_chat(
                 provider=provider_info.id,
@@ -109,6 +110,8 @@ async def chat_stream(
             if stream is not None:
                 await stream.aclose()
                 logger.info("API end point closed stream service.")
+
+            CHAT_ACTIVE_STREAMS.dec()
 
         CHAT_REQUESTS.labels(
             provider=provider_info.id,
