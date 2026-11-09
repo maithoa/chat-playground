@@ -1,15 +1,42 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { DuoArena } from "./DuoArena";
 import * as llmService from "@/services/llmService";
 import { UsageProvider } from "@/context/UsageContext";
 
+// The DuoArena component also uses the `useUsageContext` hook. For the purpose of
+// this unit‑test we mock the entire context module – the provider simply renders
+// its children and the hook returns a no‑op `refreshUsage` function.
+vi.mock("@/context/UsageContext", () => {
+  const React = require("react");
+  return {
+    UsageProvider: ({ children }: any) =>
+      React.createElement(React.Fragment, null, children),
+    useUsageContext: () => ({ refreshUsage: async () => {} }),
+  };
+});
+
+// The real `ErrorMessage` component is exported via
+// `src/components/ErrorMessage/index.ts`. No mocking is needed – the test can use the
+// actual component. The import path `@/components/ErrorMessage` resolves to that
+// index file via the project's tsconfig path alias.
+
 // ---------------------------------------------------------------------------
 // Mock heavy children
 // ---------------------------------------------------------------------------
+// Mock StreamWindow to render the streamed messages so tests can assert on content.
 vi.mock("@/components/Module/StreamWindow", () => ({
-  StreamWindow: ({ isGenerating, onStop }: any) => (
+  StreamWindow: ({ messages, isGenerating, onStop }: any) => (
     <div data-testid="stream-window">
+      {/* Render each message's content for assertions */}
+      {messages?.map((msg: any, idx: number) => (
+        <div
+          key={idx}
+          data-testid={msg.role === "assistant" ? "assistant-message" : "user-message"}
+        >
+          {msg.content}
+        </div>
+      ))}
       <button data-testid="stop-btn" onClick={onStop} disabled={!isGenerating}>
         Stop
       </button>
@@ -26,13 +53,12 @@ vi.mock("@/services/llmService", () => ({
 
 describe("DuoArena component", () => {
   beforeEach(() => {
-    document.body.innerHTML = "";
+    // No manual DOM manipulation – `render` creates its own container.
     vi.clearAllMocks();
 
-    // Default implementation for streamChat mock
+    // Default mock implementation used by the earlier tests.
     vi.mocked(llmService.streamChat).mockImplementation(
       async ({ outChunk, onUsageComplete }: any) => {
-        // Yield a tiny microtask delay
         await new Promise((r) => setTimeout(r, 10));
         outChunk("Hello ");
         outChunk("world");
@@ -166,5 +192,98 @@ describe("DuoArena component", () => {
     expect(abortSpy).toHaveBeenCalled();
 
     abortSpy.mockRestore();
+  });
+
+  // ---------------------------------------------------------------------
+  // 5️⃣ Regression: left stream fails after first chunk, right stays alive
+  // ---------------------------------------------------------------------
+  it("left stream fails after first chunk while right stream stays alive and then finishes", async () => {
+    // ---------------------------------------------------------------
+    // Synchronisation helpers – we need to know exactly when the left
+    // error message appears before letting the right side emit.
+    // ---------------------------------------------------------------
+
+    let releaseRightStream!: () => void;
+    const rightCanProceed = new Promise<void>((resolve) => {
+      releaseRightStream = resolve;
+    });
+
+    // ---------------------------------------------------------------
+    // Mock implementations for the two streams
+    // ---------------------------------------------------------------
+    // Left stream – emit "Hello" then throw an error
+    vi.mocked(llmService.streamChat).mockImplementationOnce(async ({ outChunk }: any) => {
+      // Emit the first chunk, then wait longer than the component's flush interval
+      // (FLUSH_INTERVAL_MS = 120) before throwing the error. This gives the UI
+      // time to flush the buffered "Hello" into the assistant message.
+      outChunk("Hello");
+      await new Promise((r) => setTimeout(r, 130));
+      throw new Error("Left‑stream failure");
+    });
+
+    // Right stream – wait for left error, then emit normal content
+    vi.mocked(llmService.streamChat).mockImplementationOnce(
+      async ({ outChunk, onUsageComplete }: any) => {
+        await rightCanProceed; // ensure left error is visible first
+
+        outChunk("World");
+        outChunk("!");
+        onUsageComplete?.({
+          prompt_tokens: 5,
+          completion_tokens: 5,
+          total_tokens: 10,
+          time_to_first_token_ms: 120,
+          tokens_per_second: 10,
+        });
+      }
+    );
+
+    // ---------------------------------------------------------------
+    // Render component and trigger both streams
+    // ---------------------------------------------------------------
+    render(
+      <UsageProvider>
+        <DuoArena />
+      </UsageProvider>
+    );
+
+    const textarea = screen.getByPlaceholderText(/Type a prompt/i) as HTMLTextAreaElement;
+    const runBtn = screen.getByRole("button", { name: /run/i });
+
+    fireEvent.change(textarea, { target: { value: "test both" } });
+    fireEvent.click(runBtn);
+
+    // ---------------------------------------------------------------
+    // Assertions
+    // ---------------------------------------------------------------
+    // Left side should show the first chunk "Hello"
+    await waitFor(() => {
+      const leftWindow = screen.getAllByTestId("stream-window")[0];
+      expect(within(leftWindow).getByText(/Hello/)).toBeInTheDocument();
+    });
+
+    // Left side error message appears
+    await waitFor(() => {
+      expect(screen.getByText(/Left‑stream failure/)).toBeInTheDocument();
+    });
+    // Left button is disabled, right button is still enabled (stream still running)
+    const stopButtons = screen.getAllByTestId("stop-btn");
+    expect(stopButtons[0]).toBeDisabled(); // left (error path)
+    expect(stopButtons[1]).toBeEnabled(); // right (normal completion)
+
+    releaseRightStream!(); // allow the right stream to proceed
+
+    // After the left‑side error is displayed, the right side should emit its
+    // content. We simply wait for the right‑side messages to appear.
+    const rightWindow = screen.getAllByTestId("stream-window")[1];
+    await waitFor(() => {
+      expect(within(rightWindow).getByText(/World/)).toBeInTheDocument();
+      expect(within(rightWindow).getByText(/!/)).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(stopButtons[0]).toBeDisabled(); // left (error path)
+      expect(stopButtons[1]).toBeDisabled(); // right (normal completion)
+    });
   });
 });

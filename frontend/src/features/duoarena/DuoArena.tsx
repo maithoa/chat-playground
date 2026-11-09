@@ -70,6 +70,7 @@ export function DuoArena() {
     const messages = isA ? messagesA : messagesB;
     const setMessages = isA ? setMessagesA : setMessagesB;
     const setIsGenerating = isA ? setIsGeneratingA : setIsGeneratingB;
+
     const abortControllerRef = isA ? abortControllerRefA : abortControllerRefB;
     const streamingBufferRef = isA ? streamingBufferRefA : streamingBufferRefB;
     const timerRef = isA ? timerRefA : timerRefB;

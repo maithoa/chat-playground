@@ -71,8 +71,7 @@ export function ChatBox() {
     // streaming buffer
     streamingBufferRef.current = "";
     // timer buffer
-    timerRef.current = window.setInterval(flushBuffer, FLUSH_INTERVAL_MS);
-
+    timerRef.current = setInterval(flushBuffer, FLUSH_INTERVAL_MS);
     try {
       await streamChat({
         provider: providerId,
