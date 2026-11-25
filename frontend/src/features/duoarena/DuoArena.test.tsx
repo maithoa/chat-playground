@@ -16,6 +16,23 @@ vi.mock("@/context/UsageContext", () => {
   };
 });
 
+// Mock ModelPairSelector to immediately call onSelectPair with default values.
+vi.mock("@/components/DuoArena/ModelPairSelector", () => {
+  const React = require("react");
+  return {
+    ModelPairSelector: ({ onSelectPair }: any) => {
+      // invoke with defaults matching the existing hard‑coded ones
+      React.useEffect(() => {
+        onSelectPair(
+          { providerId: "groq", modelId: "openai/gpt-oss-120b" },
+          { providerId: "openrouter", modelId: "openrouter/free" }
+        );
+      }, []);
+      return null;
+    },
+  };
+});
+
 // The real `ErrorMessage` component is exported via
 // `src/components/ErrorMessage/index.ts`. No mocking is needed – the test can use the
 // actual component. The import path `@/components/ErrorMessage` resolves to that

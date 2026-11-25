@@ -4,6 +4,9 @@ import { streamChat } from "@/services/llmService";
 import type { Message } from "@/types/chat";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { useUsageContext } from "@/context/UsageContext";
+import { ModelPairSelector } from "@/components/DuoArena/ModelPairSelector";
+import type { ProviderInfo } from "@/types/llm";
+import { env } from "@/config/env";
 
 export function DuoArena() {
   // ui state
@@ -15,6 +18,50 @@ export function DuoArena() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const userUsageContext = useUsageContext();
+
+  // Selected providers/models for the two streams. Initialise with defaults.
+  const [selectedA, setSelectedA] = useState<{ providerId: string; modelId: string }>({
+    providerId: "groq",
+    modelId: "openai/gpt-oss-120b",
+  });
+  const [selectedB, setSelectedB] = useState<{ providerId: string; modelId: string }>({
+    providerId: "openrouter",
+    modelId: "openrouter/free",
+  });
+
+  // Provider list used to translate provider/model IDs to human‑readable names for the headings.
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+
+  // Fetch provider info once – similar to ModelPairSelector but kept locally for name lookup.
+  useEffect(() => {
+    const fetchProviders = async () => {
+      try {
+        const res = await fetch(`${env.API_BASE_URL}/llm/providers`);
+        if (!res.ok) throw new Error("Failed to fetch providers");
+        const data: ProviderInfo[] = await res.json();
+        setProviders(data);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchProviders();
+  }, []);
+
+  const getDisplay = (providerId: string, modelId: string) => {
+    const provider = providers.find((p) => p.id === providerId);
+    const modelName = provider?.models?.find((m) => m.id === modelId)?.name;
+    if (provider && modelName) {
+      return `(${provider.name} / ${modelName})`;
+    }
+    // Fallback to static defaults if providers not loaded yet.
+    if (providerId === "groq" && modelId === "openai/gpt-oss-120b") {
+      return "(Groq / GPT-OSS-120B)";
+    }
+    if (providerId === "openrouter" && modelId === "openrouter/free") {
+      return "(OpenRouter / Free)";
+    }
+    return "";
+  };
 
   // refs
   const abortControllerRefA = useRef<AbortController | null>(null);
@@ -152,8 +199,9 @@ export function DuoArena() {
     const currentPrompt = input;
     setInput("");
 
-    executeStream("groq", "openai/gpt-oss-120b", "A", currentPrompt);
-    executeStream("openrouter", "openrouter/free", "B", currentPrompt);
+    // Use the currently selected provider/model pairs (fallback to defaults).
+    executeStream(selectedA.providerId, selectedA.modelId, "A", currentPrompt);
+    executeStream(selectedB.providerId, selectedB.modelId, "B", currentPrompt);
   };
 
   // Handle Keydown for Enter to hit Run button
@@ -179,7 +227,7 @@ export function DuoArena() {
               Model A
             </span>
             <span className="text-[11px] text-slate-500 font-mono">
-              (Groq / GPT-OSS-120B)
+              {getDisplay(selectedA.providerId, selectedA.modelId)}
             </span>
           </div>
           <StreamWindow
@@ -197,7 +245,7 @@ export function DuoArena() {
               Model B
             </span>
             <span className="text-[11px] text-slate-500 font-mono">
-              (OpenRouter / Free)
+              {getDisplay(selectedB.providerId, selectedB.modelId)}
             </span>
           </div>
           <StreamWindow
@@ -207,6 +255,15 @@ export function DuoArena() {
           />
         </div>
       </div>
+
+      {/* Model selectors – rendered only when provider info is sufficient */}
+      <ModelPairSelector
+        onSelectPair={(a, b) => {
+          setSelectedA(a);
+          setSelectedB(b);
+        }}
+        disabled={isGeneratingA || isGeneratingB}
+      />
 
       <ErrorMessage message={errorMessage} onClose={() => setErrorMessage(null)} />
 
