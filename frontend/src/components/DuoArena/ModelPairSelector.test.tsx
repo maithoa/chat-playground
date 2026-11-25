@@ -132,10 +132,10 @@ describe("ModelPairSelector – happy path", () => {
       name: "Google Gemini",
       is_active: true,
       models: [
-        { id: "gem-1", name: "Gemini 1", provider_id: "gemini" },
-        { id: "gem-2", name: "Gemini 2", provider_id: "gemini" },
-        { id: "gem-3", name: "Gemini 3", provider_id: "gemini" },
-        { id: "gem-4", name: "Gemini 4", provider_id: "gemini" },
+        { id: "gem-1", name: "Gemini-1", provider_id: "gemini" },
+        { id: "gem-2", name: "Gemini-2", provider_id: "gemini" },
+        { id: "gem-3", name: "Gemini-3", provider_id: "gemini" },
+        { id: "gem-4", name: "Gemini-4", provider_id: "gemini" },
       ],
     },
   ];
@@ -195,7 +195,7 @@ describe("ModelPairSelector – happy path", () => {
     ).toBeDisabled();
 
     // Select a model from Gemini
-    const geminiModelCheckbox = screen.getByLabelText("Gemini 2") as HTMLInputElement;
+    const geminiModelCheckbox = screen.getByLabelText("Gemini-2") as HTMLInputElement;
     fireEvent.click(geminiModelCheckbox);
     expect(geminiModelCheckbox.checked).toBe(true);
 
@@ -230,7 +230,7 @@ describe("ModelPairSelector – happy path", () => {
 
     // Select two models
     fireEvent.click(screen.getByLabelText("GPT‑OSS"));
-    fireEvent.click(screen.getByLabelText("Gemini 1"));
+    fireEvent.click(screen.getByLabelText("Gemini-1"));
 
     // All other checkboxes must now be disabled
     const otherCheckboxes = screen
