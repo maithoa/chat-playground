@@ -163,9 +163,6 @@ export const ModelPairSelector: React.FC<ModelPairSelectorProps> = ({
 
   return (
     <div className="my-2">
-      <span className="text-slate-300 text-sm block mb-2">
-        Select exactly two models to compare. You can pick from different providers.
-      </span>
       {/* Collapsed view */}
       {!expanded && (
         <button
@@ -175,7 +172,7 @@ export const ModelPairSelector: React.FC<ModelPairSelectorProps> = ({
             setOpenProviders(providers.map((p) => p.id));
           }}
           disabled={disabled}
-          className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded transition-colors duration-150"
+          className="px-5 py-2 bg-sky-600 hover:bg-sky-400 text-white rounded transition-colors duration-150 cursor-pointer"
         >
           Change Comparison Models
         </button>
@@ -201,7 +198,7 @@ export const ModelPairSelector: React.FC<ModelPairSelectorProps> = ({
                 setExpanded(false);
               }}
               disabled={disabled || selected.length !== 2}
-              className="px-4 py-1.5 bg-sky-500 hover:bg-sky-400 text-white rounded transition-colors duration-150 disabled:opacity-40"
+              className="px-5 py-2 bg-sky-500 hover:bg-sky-400 cursor-pointer text-white rounded transition-colors duration-150 disabled:opacity-40"
             >
               Apply selections to compare
             </button>
