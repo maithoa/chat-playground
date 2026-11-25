@@ -27,13 +27,20 @@ jobs:
       actions: read
       contents: read
     steps:
-      - name: Download tested frontend
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
+      - name: Find tested frontend artifact
+        id: frontend
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          artifact_id=$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID/artifacts?name=frontend-dist" \
+            --jq '[.artifacts[] | select(.expired == false)]
+                  | if length == 1 then .[0].id
+                    else error("Expected one frontend-dist artifact from this CI run")
+                    end')
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
       - name: Sign in to AWS using OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
