@@ -1,0 +1,98 @@
+name: Deploy to Lightsail
+
+on:
+  workflow_run:
+    workflows: ["Chat Playground CI Pipeline"]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: lightsail-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Download tested frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Deploy tested commit to Lightsail
+        shell: bash
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          LIGHTSAIL_HOST: ${{ vars.LIGHTSAIL_HOST }}
+          LIGHTSAIL_HOST_KEY: ${{ vars.LIGHTSAIL_HOST_KEY }}
+          LIGHTSAIL_SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+
+          # Use the host key copied from the Lightsail console.
+          install -d -m 700 ~/.ssh
+          umask 077
+          printf '%s\n' "$LIGHTSAIL_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s %s\n' "$LIGHTSAIL_HOST" "$LIGHTSAIL_HOST_KEY" > ~/.ssh/known_hosts
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+
+          ssh_opts=(
+            -i "$HOME/.ssh/deploy_key"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o ConnectTimeout=15
+          )
+          target="ubuntu@$LIGHTSAIL_HOST"
+
+          # Stage the frontend outside the live Nginx directory.
+          stage=$(ssh "${ssh_opts[@]}" "$target" 'mktemp -d /tmp/chatplayground.XXXXXXXX')
+          tar -C dist -czf - . |
+            ssh "${ssh_opts[@]}" "$target" "tar -xzf - -C '$stage'"
+
+          ssh "${ssh_opts[@]}" "$target" bash -s -- "$DEPLOY_SHA" "$stage" <<'REMOTE'
+          set -euo pipefail
+          sha=$1
+          stage=$2
+          trap 'rm -rf -- "$stage"' EXIT
+          cd /home/ubuntu/chat-playground
+
+          git fetch origin refs/heads/master
+          if [[ "$(git rev-parse FETCH_HEAD)" != "$sha" ]]; then
+            echo "A newer commit is on master. Skipping this deployment."
+            exit 0
+          fi
+
+          git checkout --detach "$sha"
+          backend/.venv/bin/python -m pip install -e ./backend
+          sudo -n systemctl restart chatplayground.service
+
+          # Verify HTTPS through Nginx and check that systemd reports the backend active.
+          curl --fail --silent --show-error --retry 8 --retry-connrefused \
+            --retry-delay 2 --max-time 5 \
+            --resolve chat.maitools.space:443:127.0.0.1 \
+            https://chat.maitools.space/ -o /dev/null
+          systemctl is-active --quiet chatplayground.service
+
+          # Publish assets before switching the HTML that references them.
+          webroot=/var/www/chatplayground
+          find "$stage" -mindepth 1 -maxdepth 1 ! -name index.html \
+            -exec cp -R --no-preserve=mode -- {} "$webroot/" \;
+          install -m 644 "$stage/index.html" "$webroot/.index-${sha}.tmp"
+          mv -f "$webroot/.index-${sha}.tmp" "$webroot/index.html"
+          echo "Deployed $sha"
+          REMOTE
