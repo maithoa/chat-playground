@@ -1,113 +1,197 @@
 name: Deploy to Lightsail
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["Chat Playground CI Pipeline"]
     types: [completed]
     branches: [master]
 
-permissions:
-  actions: read
-  contents: read
+permissions: {}
 
-concurrency:
-  group: lightsail-production
-  cancel-in-progress: false
+env:
+  AWS_REGION: eu-north-1
+  NODE_ID: mi-04ab2cdc32da53946
 
 jobs:
-  deploy:
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+  check-ssm:
+    name: Check SSM connection
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     permissions:
       id-token: write
-      actions: read
       contents: read
+
     steps:
-      - name: Find tested frontend artifact
-        id: frontend
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CI_RUN_ID: ${{ github.event.workflow_run.id }}
-        run: |
-          set -euo pipefail
-          artifact_id=$(gh api \
-            "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID/artifacts?name=frontend-dist" \
-            --jq '[.artifacts[] | select(.expired == false)]
-                  | if length == 1 then .[0].id
-                    else error("Expected one frontend-dist artifact from this CI run")
-                    end')
-          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
       - name: Sign in to AWS using OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: eu-north-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy tested commit to Lightsail
+      - name: Run whoami on Lightsail
         shell: bash
-        env:
-          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
-          LIGHTSAIL_HOST: ${{ vars.LIGHTSAIL_HOST }}
-          LIGHTSAIL_HOST_KEY: ${{ vars.LIGHTSAIL_HOST_KEY }}
-          LIGHTSAIL_SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
         run: |
           set -euo pipefail
-          test -s dist/index.html
 
-          # Use the host key copied from the Lightsail console.
-          install -d -m 700 ~/.ssh
-          umask 077
-          printf '%s\n' "$LIGHTSAIL_SSH_KEY" > ~/.ssh/deploy_key
-          printf '%s %s\n' "$LIGHTSAIL_HOST" "$LIGHTSAIL_HOST_KEY" > ~/.ssh/known_hosts
-          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          command_id=$(aws ssm send-command \
+            --instance-ids "$NODE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters '{"commands":["whoami"]}' \
+            --query 'Command.CommandId' \
+            --output text)
 
-          ssh_opts=(
-            -i "$HOME/.ssh/deploy_key"
-            -o BatchMode=yes
-            -o IdentitiesOnly=yes
-            -o StrictHostKeyChecking=yes
-            -o ConnectTimeout=15
-          )
-          target="ubuntu@$LIGHTSAIL_HOST"
+          aws ssm wait command-executed \
+            --command-id "$command_id" \
+            --instance-id "$NODE_ID"
 
-          # Stage the frontend outside the live Nginx directory.
-          stage=$(ssh "${ssh_opts[@]}" "$target" 'mktemp -d /tmp/chatplayground.XXXXXXXX')
-          tar -C dist -czf - . |
-            ssh "${ssh_opts[@]}" "$target" "tar -xzf - -C '$stage'"
+          aws ssm get-command-invocation \
+            --command-id "$command_id" \
+            --instance-id "$NODE_ID" \
+            --query '{Status:Status,User:StandardOutputContent}'
 
-          ssh "${ssh_opts[@]}" "$target" bash -s -- "$DEPLOY_SHA" "$stage" <<'REMOTE'
+  deploy:
+    name: Deploy tested commit
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'master' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      id-token: write
+      actions: read
+      contents: read
+    concurrency:
+      group: lightsail-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Sign in to AWS using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Prepare deployment command for the tested artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
           set -euo pipefail
-          sha=$1
-          stage=$2
-          trap 'rm -rf -- "$stage"' EXIT
-          cd /home/ubuntu/chat-playground
+          umask 077
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
 
+          # Select the artifact from the specific CI run that triggered deployment.
+          artifact=$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID/artifacts?name=frontend-dist" \
+            --jq '[.artifacts[] | select(.expired == false)]
+                  | if length == 1 then .[0]
+                    else error("Expected one available frontend-dist artifact")
+                    end')
+
+          artifact_id=$(jq -er '.id' <<< "$artifact")
+          digest=$(jq -er '.digest' <<< "$artifact")
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          # Request a fresh download URL. Only the runner uses the GitHub token.
+          download_url=$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --output /dev/null \
+            --write-out '%{redirect_url}' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip")
+          [[ "$download_url" == https://* ]]
+
+          # SSM starts as root. Run the deployment as the existing app user.
+          # Fetch the script from the tested commit, including on the first deploy.
+          cat > "$RUNNER_TEMP/lightsail-command.sh" <<'REMOTE'
+          set -euo pipefail
+          repo=/home/ubuntu/chat-playground
+          work=$(mktemp -d)
+          trap 'rm -rf -- "$work"' EXIT
+
+          curl --fail --silent --show-error --location \
+            --proto '=https' --proto-redir '=https' \
+            --connect-timeout 10 --max-time 120 \
+            "$download_url" --output "$work/frontend.zip"
+
+          printf '%s  %s\n' "$checksum" "$work/frontend.zip" |
+            sha256sum --check --status
+
+          cd "$repo"
+          exec 9>"$HOME/.chatplayground-deploy.lock"
+          flock -w 120 9
           git fetch origin refs/heads/master
           if [[ "$(git rev-parse FETCH_HEAD)" != "$sha" ]]; then
-            echo "A newer commit is on master. Skipping this deployment."
+            echo "Master has moved past $sha. Skipping this deployment."
             exit 0
           fi
 
-          git checkout --detach "$sha"
-          backend/.venv/bin/python -m pip install -e ./backend
-          sudo -n systemctl restart chatplayground.service
-
-          # Verify HTTPS through Nginx and check that systemd reports the backend active.
-          curl --fail --silent --show-error --retry 8 --retry-connrefused \
-            --retry-delay 2 --max-time 5 \
-            --resolve chat.maitools.space:443:127.0.0.1 \
-            https://chat.maitools.space/ -o /dev/null
-          systemctl is-active --quiet chatplayground.service
-
-          # Publish assets before switching the HTML that references them.
-          webroot=/var/www/chatplayground
-          find "$stage" -mindepth 1 -maxdepth 1 ! -name index.html \
-            -exec cp -R --no-preserve=mode -- {} "$webroot/" \;
-          install -m 644 "$stage/index.html" "$webroot/.index-${sha}.tmp"
-          mv -f "$webroot/.index-${sha}.tmp" "$webroot/index.html"
-          echo "Deployed $sha"
+          git show "${sha}:scripts/deploy-lightsail.sh" > "$work/deploy.sh"
+          bash "$work/deploy.sh" "$sha" "$work/frontend.zip"
           REMOTE
+
+          jq -n \
+            --arg sha "$DEPLOY_SHA" \
+            --arg url "$download_url" \
+            --arg checksum "${digest#sha256:}" \
+            --rawfile script "$RUNNER_TEMP/lightsail-command.sh" \
+            '{
+              commands: [
+                ("sudo -u ubuntu -H bash -c " +
+                  (("sha=" + ($sha | @sh) + "\n" +
+                    "download_url=" + ($url | @sh) + "\n" +
+                    "checksum=" + ($checksum | @sh) + "\n" +
+                    $script) | @sh))
+              ],
+              executionTimeout: ["900"]
+            }' > "$RUNNER_TEMP/ssm-deploy.json"
+
+      - name: Deploy on Lightsail and wait for the result
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          command_id=$(aws ssm send-command \
+            --instance-ids "$NODE_ID" \
+            --document-name AWS-RunShellScript \
+            --timeout-seconds 60 \
+            --parameters "file://$RUNNER_TEMP/ssm-deploy.json" \
+            --query 'Command.CommandId' \
+            --output text)
+          rm -f "$RUNNER_TEMP/ssm-deploy.json"
+          echo "SSM command ID: $command_id"
+
+          # A new invocation can take a few seconds to appear in SSM.
+          deadline=$((SECONDS + 960))
+          while (( SECONDS < deadline )); do
+            if result=$(aws ssm get-command-invocation \
+              --command-id "$command_id" \
+              --instance-id "$NODE_ID" \
+              --output json 2>"$RUNNER_TEMP/ssm-error"); then
+              status=$(jq -r '.Status' <<< "$result")
+              case "$status" in
+                Pending|InProgress|Delayed|Cancelling)
+                  ;;
+                *)
+                  jq -r '.StandardOutputContent, .StandardErrorContent' <<< "$result"
+                  echo "SSM status: $status"
+                  [[ "$status" == Success ]]
+                  exit
+                  ;;
+              esac
+            elif ! grep -q 'InvocationDoesNotExist' "$RUNNER_TEMP/ssm-error"; then
+              cat "$RUNNER_TEMP/ssm-error" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "Timed out waiting for SSM command $command_id" >&2
+          exit 1
