@@ -34,6 +34,11 @@ jobs:
           path: dist
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
+      - name: Sign in to AWS using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-north-1
 
       - name: Deploy tested commit to Lightsail
         shell: bash
