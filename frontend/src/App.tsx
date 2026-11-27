@@ -1,4 +1,11 @@
-import { useState } from "react";
+import {
+  analyticsAvailable,
+  analyticsPreference,
+  recordAction,
+  recordVisit,
+  setAnalyticsPreference,
+} from "./analytics";
+import { useEffect, useState } from "react";
 import "./App.css";
 import { ChatBox } from "./features/chatbox/ChatBox";
 import { DuoArena } from "./features/duoarena/DuoArena";
@@ -7,6 +14,20 @@ import { TokensConsumptionProgress } from "./components/Button/TokensConsumption
 
 function App() {
   const [activeTab, setActiveTab] = useState<"chat" | "arena">("chat");
+
+  const [preference, setPreference] = useState(analyticsPreference);
+  const [showPreferences, setShowPreferences] = useState(false);
+
+  useEffect(() => {
+    recordVisit();
+  }, []);
+
+  function chooseAnalytics(allow: boolean) {
+    setAnalyticsPreference(allow);
+    setPreference(allow ? "yes" : "no");
+    setShowPreferences(false);
+    if (allow) recordVisit();
+  }
 
   return (
     <UsageProvider>
@@ -28,7 +49,10 @@ function App() {
             {/* Tab Switcher kiểu Glass Badge */}
             <nav className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800/80">
               <button
-                onClick={() => setActiveTab("chat")}
+                onClick={() => {
+                  recordAction("open_single_chat");
+                  setActiveTab("chat");
+                }}
                 aria-pressed={activeTab === "chat"}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
                   activeTab === "chat"
@@ -39,7 +63,10 @@ function App() {
                 Single Chat
               </button>
               <button
-                onClick={() => setActiveTab("arena")}
+                onClick={() => {
+                  recordAction("open_duo_arena");
+                  setActiveTab("arena");
+                }}
                 aria-pressed={activeTab === "arena"}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
                   activeTab === "arena"
@@ -57,6 +84,44 @@ function App() {
             <TokensConsumptionProgress />
           </div>
         </header>
+
+        {analyticsAvailable && (
+          <aside
+            aria-label="Usage analytics"
+            className="relative z-10 px-8 pb-2 text-xs text-slate-300"
+          >
+            {showPreferences || preference === null ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <p>
+                  May we count visits and button clicks with PostHog? We don’t send
+                  prompts or replies.
+                </p>
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => chooseAnalytics(true)}
+                >
+                  Allow analytics
+                </button>
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => chooseAnalytics(false)}
+                >
+                  No thanks
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="underline"
+                onClick={() => setShowPreferences(true)}
+              >
+                Analytics preferences
+              </button>
+            )}
+          </aside>
+        )}
 
         {/* 4. MAIN CONTENT */}
         <main className="relative z-10 flex-1 min-h-0 bg-transparent flex flex-col items-center w-full overflow-hidden">

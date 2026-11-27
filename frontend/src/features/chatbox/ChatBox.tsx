@@ -1,3 +1,4 @@
+import { recordAction } from "../../analytics";
 import { useState, useRef, useEffect } from "react";
 import { streamChat } from "@/services/llmService";
 import type { Message } from "@/types/chat";
@@ -56,6 +57,7 @@ export function ChatBox() {
 
   const handleSubmit = async (providerId: string, modelId: string) => {
     if (!input.trim() || isGenerating) return;
+    recordAction("send_message");
 
     // form the message object and update the messages state
     const userMessage: Message = { role: "user", content: input };
@@ -130,6 +132,7 @@ export function ChatBox() {
 
   const handleStop = () => {
     if (abortControllerRef.current) {
+      recordAction("stop_single_chat");
       abortControllerRef.current.abort();
     }
   };
