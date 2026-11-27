@@ -1,3 +1,4 @@
+import { recordAction } from "../../analytics";
 import { useState, useRef, useEffect } from "react";
 import { StreamWindow } from "@/components/Module/StreamWindow";
 import { streamChat } from "@/services/llmService";
@@ -196,6 +197,7 @@ export function DuoArena() {
   // Handle Arena run
   const handleRunBoth = () => {
     if (!input.trim() || isGeneratingA || isGeneratingB) return;
+    recordAction("run_both");
     const currentPrompt = input;
     setInput("");
 
@@ -233,7 +235,10 @@ export function DuoArena() {
           <StreamWindow
             messages={messagesA}
             isGenerating={isGeneratingA}
-            onStop={() => abortControllerRefA.current?.abort()}
+            onStop={() => {
+              recordAction("stop_duo_arena");
+              abortControllerRefA.current?.abort();
+            }}
           />
         </div>
 
@@ -251,7 +256,10 @@ export function DuoArena() {
           <StreamWindow
             messages={messagesB}
             isGenerating={isGeneratingB}
-            onStop={() => abortControllerRefB.current?.abort()}
+            onStop={() => {
+              recordAction("stop_duo_arena");
+              abortControllerRefB.current?.abort();
+            }}
           />
         </div>
       </div>
